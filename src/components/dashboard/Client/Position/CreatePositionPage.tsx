@@ -1,3 +1,4 @@
+
 "use client"
 
 import React from "react"
@@ -10,7 +11,7 @@ import { motion } from "framer-motion"
 import axios from "axios"
 import { createPosition, clearPositionError } from "../../../../Redux/Slices/PositionSlices"
 import type { AppDispatch, RootState } from "../../../../Redux/store"
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, Building, Users, Briefcase, Award } from "lucide-react"
 
 // Interfaces for API responses
 interface APIResponse<T> {
@@ -25,32 +26,53 @@ interface IDepartment {
   company: {
     id: number
     name: string
+    tin: string | null
   } | null
-  organization_id?: number
+  organization: {
+    id: number
+    name: string
+    description: string
+  }
+}
+
+interface ISupervisoryLevel {
+  id: number
+  level: string
+  isActive: boolean
+  created_at: string
+  updated_at: string
 }
 
 interface ICompany {
   id: number
   name: string
+  tin: string
+  userCount: number
   departments: {
     id: number
     name: string
   }[]
-  organization_id?: number
+  organization: {
+    id: number
+    name: string
+    description: string
+  }
 }
 
 // Form values interface
 interface FormValues {
   title: string
-  description: string
   company_id: string
   department_id: string
+  supervisory_level_id: string
 }
 
 // Validation schema
 const validationSchema = Yup.object().shape({
   title: Yup.string().required("Position title is required"),
-  description: Yup.string().required("Position description is required"),
+  company_id: Yup.string().required("Company is required"),
+  department_id: Yup.string().required("Department is required"),
+  supervisory_level_id: Yup.string().required("Supervisory level is required"),
 })
 
 const CreatePositionPage: React.FC = () => {
@@ -61,16 +83,18 @@ const CreatePositionPage: React.FC = () => {
   const [formCompletion, setFormCompletion] = useState(0)
   const [companies, setCompanies] = useState<ICompany[]>([])
   const [departments, setDepartments] = useState<IDepartment[]>([])
+  const [supervisoryLevels, setSupervisoryLevels] = useState<ISupervisoryLevel[]>([])
+  const [loadingData, setLoadingData] = useState(false)
   const [formValues, setFormValues] = useState<FormValues>({
     title: "",
-    description: "",
     company_id: "",
     department_id: "",
+    supervisory_level_id: "",
   })
 
   // Calculate form completion percentage
   const calculateFormCompletion = (values: FormValues) => {
-    const requiredFields = ["title", "description"]
+    const requiredFields = ["title", "company_id", "department_id", "supervisory_level_id"]
     let filledFields = 0
 
     requiredFields.forEach((field) => {
@@ -91,16 +115,17 @@ const CreatePositionPage: React.FC = () => {
     }
   }, [error, dispatch])
 
-  // Fetch companies and departments
+  // Fetch companies, departments and supervisory levels
   useEffect(() => {
     const fetchData = async () => {
+      if (!user?.organization?.id) {
+        return
+      }
+
+      setLoadingData(true)
       try {
         const token = localStorage.getItem("token")
-        const organizationId = user?.organization?.id
-
-        if (!organizationId) {
-          return
-        }
+        const organizationId = user.organization.id
 
         // Fetch companies from the user's organization
         const companiesResponse = await axios.get<APIResponse<{ companies: ICompany[] }>>(
@@ -109,9 +134,9 @@ const CreatePositionPage: React.FC = () => {
             headers: {
               Authorization: `Bearer ${token}`,
             },
-          }
+          },
         )
-        
+
         if (companiesResponse.data.success && companiesResponse.data.data.companies) {
           setCompanies(companiesResponse.data.data.companies)
         }
@@ -123,34 +148,48 @@ const CreatePositionPage: React.FC = () => {
             headers: {
               Authorization: `Bearer ${token}`,
             },
-          }
+          },
         )
-        
+
         if (departmentsResponse.data.success && departmentsResponse.data.data.departments) {
           setDepartments(departmentsResponse.data.data.departments)
         }
+
+        // Fetch supervisory levels from the user's organization
+        const supervisoryLevelsResponse = await axios.get<APIResponse<ISupervisoryLevel[]>>(
+          `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/supervisory-levels`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+
+        if (supervisoryLevelsResponse.data.success && supervisoryLevelsResponse.data.data) {
+          setSupervisoryLevels(supervisoryLevelsResponse.data.data)
+        }
       } catch (error) {
+        console.error("Error fetching data:", error)
+      } finally {
+        setLoadingData(false)
       }
     }
 
-    if (user?.organization?.id) {
-      fetchData()
-    }
+    fetchData()
   }, [user?.organization?.id])
 
+  // Get selected company details
+  const selectedCompany = companies.find((company) => company.id === Number.parseInt(formValues.company_id))
+
   // Filter departments based on selected company
-  const filteredDepartments = formValues.company_id
-    ? departments.filter(
-        (dept) => dept.company && dept.company.id === parseInt(formValues.company_id)
-      )
-    : departments
+  const filteredDepartments = formValues.company_id && selectedCompany ? selectedCompany.departments : []
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-white to-purple-50 py-8 px-4 sm:px-6 lg:px-8">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl mx-auto bg-white rounded-xl shadow-md overflow-hidden"
+        className="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden"
       >
         <div className="p-8">
           <div className="flex items-center justify-between mb-6">
@@ -167,7 +206,14 @@ const CreatePositionPage: React.FC = () => {
           {!user?.organization?.id ? (
             <div className="border border-red text-red px-4 py-3 rounded relative" role="alert">
               <strong className="font-bold">Error: </strong>
-              <span className="block sm:inline">Organization ID is missing. Please ensure your account is properly set up.</span>
+              <span className="block sm:inline">
+                Organization ID is missing. Please ensure your account is properly set up.
+              </span>
+            </div>
+          ) : loadingData ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green"></div>
+              <span className="ml-2 text-gray-600">Loading companies, departments and supervisory levels...</span>
             </div>
           ) : (
             <Formik
@@ -176,9 +222,9 @@ const CreatePositionPage: React.FC = () => {
               onSubmit={async (values, { resetForm }) => {
                 const positionData = {
                   title: values.title,
-                  description: values.description,
-                  ...(values.company_id && { company_id: Number(values.company_id) }),
-                  ...(values.department_id && { department_id: Number(values.department_id) }),
+                  company_id: Number(values.company_id),
+                  department_id: Number(values.department_id),
+                  supervisory_level_id: Number(values.supervisory_level_id),
                 }
 
                 try {
@@ -201,41 +247,113 @@ const CreatePositionPage: React.FC = () => {
                   </div>
                   <div className="text-sm text-gray-500 text-right">Completion: {formCompletion}%</div>
 
-                  {/* Position Title */}
-                  <div>
-                    <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                      Position Title <span className="text-red">*</span>
-                    </label>
-                    <Field
-                      name="title"
-                      type="text"
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                      placeholder="e.g. Senior Software Engineer"
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        handleChange(e)
-                        setFormValues({ ...formValues, title: e.target.value })
-                      }}
-                    />
-                    <ErrorMessage name="title" component="div" className="mt-1 text-sm text-red" />
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Position Title */}
+                    <div className="md:col-span-2">
+                      <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                        <Briefcase className="inline h-4 w-4 mr-1" />
+                        Position Title <span className="text-red">*</span>
+                      </label>
+                      <Field
+                        name="title"
+                        type="text"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        placeholder="e.g. Senior Software Engineer"
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          handleChange(e)
+                          setFormValues({ ...formValues, title: e.target.value })
+                        }}
+                      />
+                      <ErrorMessage name="title" component="div" className="mt-1 text-sm text-red" />
+                    </div>
 
-                  {/* Position Description */}
-                  <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                      Description <span className="text-red">*</span>
-                    </label>
-                    <Field
-                      as="textarea"
-                      name="description"
-                      rows={4}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                      placeholder="Describe the responsibilities and requirements for this position"
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                        handleChange(e)
-                        setFormValues({ ...formValues, description: e.target.value })
-                      }}
-                    />
-                    <ErrorMessage name="description" component="div" className="mt-1 text-sm text-red" />
+                    {/* Company Selection */}
+                    <div>
+                      <label htmlFor="company_id" className="block text-sm font-medium text-gray-700">
+                        <Building className="inline h-4 w-4 mr-1" />
+                        Company <span className="text-red">*</span>
+                      </label>
+                      <Field
+                        as="select"
+                        name="company_id"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                          handleChange(e)
+                          setFormValues({
+                            ...formValues,
+                            company_id: e.target.value,
+                            department_id: "", // Reset department when company changes
+                          })
+                          setFieldValue("department_id", "") // Reset department field in Formik
+                        }}
+                      >
+                        <option value="">Select a company</option>
+                        {companies.map((company) => (
+                          <option key={company.id} value={company.id}>
+                            {company.name} 
+                          </option>
+                        ))}
+                      </Field>
+                      <ErrorMessage name="company_id" component="div" className="mt-1 text-sm text-red" />
+                    </div>
+
+                    {/* Department Selection */}
+                    <div>
+                      <label htmlFor="department_id" className="block text-sm font-medium text-gray-700">
+                        <Users className="inline h-4 w-4 mr-1" />
+                        Department <span className="text-red">*</span>
+                      </label>
+                      <Field
+                        as="select"
+                        name="department_id"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        disabled={!formValues.company_id}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                          handleChange(e)
+                          setFormValues({ ...formValues, department_id: e.target.value })
+                        }}
+                      >
+                        <option value="">
+                          {!formValues.company_id ? "Select a company first" : "Select a department"}
+                        </option>
+                        {filteredDepartments.map((department) => (
+                          <option key={department.id} value={department.id}>
+                            {department.name}
+                          </option>
+                        ))}
+                      </Field>
+                      <ErrorMessage name="department_id" component="div" className="mt-1 text-sm text-red" />
+                      {formValues.company_id && filteredDepartments.length === 0 && (
+                        <p className="mt-1 text-sm text-gray-500">No departments available for the selected company.</p>
+                      )}
+                    </div>
+
+                    {/* Supervisory Level Selection */}
+                    <div className="md:col-span-2">
+                      <label htmlFor="supervisory_level_id" className="block text-sm font-medium text-gray-700">
+                        <Award className="inline h-4 w-4 mr-1" />
+                        Supervisory Level <span className="text-red">*</span>
+                      </label>
+                      <Field
+                        as="select"
+                        name="supervisory_level_id"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                          handleChange(e)
+                          setFormValues({ ...formValues, supervisory_level_id: e.target.value })
+                        }}
+                      >
+                        <option value="">Select supervisory level</option>
+                        {supervisoryLevels
+                          .filter((level) => level.isActive)
+                          .map((level) => (
+                            <option key={level.id} value={level.id}>
+                              {level.level}
+                            </option>
+                          ))}
+                      </Field>
+                      <ErrorMessage name="supervisory_level_id" component="div" className="mt-1 text-sm text-red" />
+                    </div>
                   </div>
 
                   {/* Submit Button */}
@@ -243,7 +361,7 @@ const CreatePositionPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={loading || formCompletion < 100}
-                      className={`flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white 
+                      className={`flex items-center justify-center px-6 py-3 border border-transparent text-sm font-medium rounded-md text-white 
                         ${
                           formCompletion < 100
                             ? "bg-gray-400 cursor-not-allowed"

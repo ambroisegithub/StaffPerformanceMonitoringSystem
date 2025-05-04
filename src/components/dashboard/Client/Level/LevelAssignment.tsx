@@ -101,22 +101,22 @@ const LevelAssignment: React.FC<LevelAssignmentProps> = ({
       )}
       <CardContent>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md flex gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
+          <div className="mb-4 p-3 bg-red border border-red text-white rounded-md flex gap-2">
+            <AlertCircle className="h-5 w-5 text-white" />
             <div className="text-sm">{error}</div>
           </div>
         )}
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md flex gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
+          <div className="mb-4 p-3 bg-red border border-red-200 text-white rounded-md flex gap-2">
+            <AlertCircle className="h-5 w-5 text-white" />
             <div className="text-sm">{error}</div>
           </div>
         )}
 
         {successMessage && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md flex gap-2">
-            <CheckCircle className="h-5 w-5 text-green-500" />
+          <div className="mb-4 p-3 bg-green border border-green text-white rounded-md flex gap-2">
+            <CheckCircle className="h-5 w-5 text-white" />
             <div className="text-sm">{successMessage}</div>
           </div>
         )}
@@ -216,7 +216,7 @@ const LevelAssignment: React.FC<LevelAssignmentProps> = ({
                           </TableCell>
                           <TableCell>
                             {user.supervisoryLevel ? (
-                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                              <Badge className="bg-green text-white hover:bg-green-100">
                                 {user.supervisoryLevel.level}
                               </Badge>
                             ) : (

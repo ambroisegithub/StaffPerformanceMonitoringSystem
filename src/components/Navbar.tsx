@@ -15,7 +15,7 @@ export const Navbar = () => {
 
   const navLinks = [
     { path: '/', label: 'Home' },
-    { path: '/employeeDashboard', label: 'Tasks' },
+    ...(user ? [{ path: '/employeeDashboard', label: 'Tasks' }] : []),
   ];
 
   const handleLogout = () => {

@@ -1,10 +1,10 @@
 "use client"
 
 import React from "react"
-import { useState } from "react"
-import { MessageSquare } from "lucide-react"
-import { Button } from "../ui/button"
-import ChatLayout from "./ChatLayout"
+import { MessageSquare, Loader } from "lucide-react"
+import { useAppDispatch, useAppSelector } from "../../Redux/hooks"
+import { toggleChat } from "./chatSlice"
+import Chat from "./Chat"
 
 interface ChatButtonProps {
   userId: number
@@ -12,27 +12,35 @@ interface ChatButtonProps {
 }
 
 const ChatButton: React.FC<ChatButtonProps> = ({ userId, organizationId }) => {
-  const [isChatOpen, setIsChatOpen] = useState(false)
+  const dispatch = useAppDispatch()
+  const { isOpen, conversations, loading, sendingMessage } = useAppSelector((state) => state.chat)
+
+  const totalUnread = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
+
+  const handleToggleChat = () => {
+    dispatch(toggleChat())
+  }
 
   return (
     <>
-      <Button
-        onClick={() => setIsChatOpen(true)}
-        className="flex items-center gap-2 bg-blue hover:bg-blue-700 text-white"
+      <button
+        className="relative p-2 bg-blue rounded-full hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors shadow-lg"
+        onClick={handleToggleChat}
+        aria-label={`Chat ${totalUnread > 0 ? `(${totalUnread} unread)` : ""}`}
       >
-        <MessageSquare className="h-4 w-4" />
-        <span>Chat</span>
-      </Button>
+        {loading || sendingMessage ? (
+          <Loader className="h-6 w-6 animate-spin text-white" />
+        ) : (
+          <MessageSquare className="h-6 w-6 text-white" />
+        )}
+        {totalUnread > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+            {totalUnread > 99 ? "99+" : totalUnread}
+          </span>
+        )}
+      </button>
 
-      {isChatOpen && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-[95%] h-[100%] flex flex-col">
-            <div className="flex-1 overflow-hidden">
-              <ChatLayout userId={userId} organizationId={organizationId} onClose={() => setIsChatOpen(false)} />
-            </div>
-          </div>
-        </div>
-      )}
+      <Chat userId={userId} organizationId={organizationId} />
     </>
   )
 }

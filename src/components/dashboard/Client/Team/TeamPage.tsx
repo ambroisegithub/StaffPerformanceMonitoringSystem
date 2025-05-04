@@ -12,13 +12,27 @@ import {
   selectSupervisor,
   toggleMember,
   resetForm,
-  clearError
+  clearError,
+  canSupervisorAccessUser,
 } from "../../../../Redux/Slices/teamSlice"
-import { UserRole } from "../../../../Redux/Slices/SignUp"
 import type { AppDispatch, RootState } from "../../../../Redux/store"
-import { ArrowLeft, ArrowRight, Check, X, AlertCircle, Loader2, UserPlus, Users, ClipboardList, ChevronLeft, ChevronRight, Search, Plus } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  X,
+  AlertCircle,
+  Loader2,
+  UserPlus,
+  Users,
+  ClipboardList,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from "lucide-react"
 import Checkbox from "../../../ui/checkbox"
-import { Link,useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
+
 const TeamPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const {
@@ -36,12 +50,12 @@ const TeamPage: React.FC = () => {
 
   const [nameError, setNameError] = useState("")
   const [supervisorError, setSupervisorError] = useState("")
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [searchQuery, setSearchQuery] = useState("")
-  
+
   useEffect(() => {
     dispatch(fetchAllUsers())
     dispatch(fetchSupervisoryLevels())
@@ -118,25 +132,27 @@ const TeamPage: React.FC = () => {
     setSearchQuery(e.target.value)
   }
 
-  // Filter users based on search query
-  const filteredAndSearchedUsers = filteredUsers.filter(user => {
+  // Filter users based on search query and hierarchical access
+  const filteredAndSearchedUsers = filteredUsers.filter((user) => {
     const matchesSearchQuery =
       user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (user.firstName && user.firstName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (user.lastName && user.lastName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (user.role && user.role.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (user.supervisoryLevel?.level && 
-        user.supervisoryLevel.level.toLowerCase().includes(searchQuery.toLowerCase()));
+      (user.supervisoryLevel?.level && user.supervisoryLevel.level.toLowerCase().includes(searchQuery.toLowerCase()))
 
-    const isEligibleForSupervisor =
-      selectedSupervisor?.role === UserRole.ADMIN || // Admin can see all users
-      selectedSupervisor?.supervisoryLevel?.level === "Overall" || // Overall can see all users
-      (selectedSupervisor?.supervisoryLevel?.level !== "Overall" && // Other supervisors
-        (user.supervisoryLevel?.level === "None" || // Include "None" level
-         user.supervisoryLevel?.level !== "Overall")); // Exclude "Overall" level users for non-overall supervisors
+    // Additional hierarchical check (redundant but ensures consistency)
+    if (!selectedSupervisor) return false
 
-    return matchesSearchQuery && isEligibleForSupervisor;
+    const supervisorLevel = selectedSupervisor.supervisoryLevel?.level || "None"
+    const supervisorRole = selectedSupervisor.role
+    const userLevel = user.supervisoryLevel?.level || "None"
+    const userRole = user.role
+
+    const hasAccess = canSupervisorAccessUser(supervisorLevel, supervisorRole, userLevel, userRole)
+
+    return matchesSearchQuery && hasAccess
   })
 
   // Calculate pagination
@@ -157,9 +173,8 @@ const TeamPage: React.FC = () => {
       setCurrentPage(currentPage - 1)
     }
   }
-  const NavigatetoViewAllTeams = [
-    { path: '/admin/teams'},
-  ];
+
+  const NavigatetoViewAllTeams = [{ path: "/admin/teams" }]
 
   const renderStepIndicator = () => {
     return (
@@ -262,8 +277,8 @@ const TeamPage: React.FC = () => {
             <option value="">Select a supervisor</option>
             {eligibleSupervisors.map((supervisor) => (
               <option key={supervisor.id} value={supervisor.id}>
-                {supervisor.username} 
-                {/* {supervisor.lastName} {supervisor.supervisoryLevel?.level || "No Level"} */}
+                {supervisor.username}
+                {supervisor.lastName} {supervisor.supervisoryLevel?.level || "No Level"}
               </option>
             ))}
           </select>
@@ -298,17 +313,34 @@ const TeamPage: React.FC = () => {
   }
 
   const renderMembersStep = () => {
+    // Generate dynamic description based on supervisor's level and role
+    const getAccessDescription = () => {
+      if (!selectedSupervisor) return "Please select a supervisor first."
+
+      const supervisorLevel = selectedSupervisor.supervisoryLevel?.level || "None"
+      const supervisorRole = selectedSupervisor.role
+
+      if (supervisorRole === "admin" || supervisorRole === "overall") {
+        return "As an admin/overall supervisor, you can add any user to the team."
+      } else if (supervisorLevel === "Overall") {
+        return "As an overall level supervisor, you can add any non-admin user to the team."
+      } else if (supervisorLevel === "None") {
+        return "As a supervisor with no specific level, you can only add employees with 'None' level."
+      } else {
+        const levelMatch = supervisorLevel.match(/Level (\d+)/i)
+        if (levelMatch) {
+          const levelNum = Number.parseInt(levelMatch[1], 10)
+          return `As a Level ${levelNum} supervisor, you can add users with Level ${levelNum - 1} and below, plus employees with 'None' level.`
+        }
+        return "You can add users with lower supervisory levels and employees with 'None' level."
+      }
+    }
+
     return (
       <div className="space-y-6">
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">Select Team Members</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            {selectedSupervisor?.role === UserRole.ADMIN
-              ? "As an overall supervisor, you can add any user to the team."
-              : selectedSupervisor?.supervisoryLevel?.level === "Overall"
-                ? "As an overall supervisor, you can add any non-admin user to the team."
-                : "You can only add users with lower supervisory levels than the supervisor."}
-          </p>
+          <p className="text-sm text-gray-500 mb-4">{getAccessDescription()}</p>
 
           {/* Search and Pagination Controls */}
           <div className="flex flex-col md:flex-row justify-between mb-4 gap-4">
@@ -324,7 +356,7 @@ const TeamPage: React.FC = () => {
                 className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            
+
             <div className="flex items-center">
               <select
                 value={itemsPerPage}
@@ -344,33 +376,54 @@ const TeamPage: React.FC = () => {
           {filteredAndSearchedUsers.length === 0 ? (
             <div className="p-4 bg-gray-50 rounded-md text-center">
               <p className="text-gray-500">No eligible users found.</p>
+              {selectedSupervisor && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Supervisor: {selectedSupervisor.username} (Level:{" "}
+                  {selectedSupervisor.supervisoryLevel?.level || "None"})
+                </p>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto border border-gray-200 rounded-md">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12"
+                    >
                       Select
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Username
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Email
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Role
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Level
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentItems.map((user) => (
-                    <tr 
-                      key={user.id} 
+                    <tr
+                      key={user.id}
                       className={`hover:bg-gray-50 transition-colors ${
                         selectedMembers.includes(user.id) ? "bg-green" : ""
                       }`}
@@ -380,7 +433,6 @@ const TeamPage: React.FC = () => {
                           id={`user-${user.id}`}
                           checked={selectedMembers.includes(user.id)}
                           onCheckedChange={() => handleMemberToggle(user.id)}
-                         
                         />
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap">
@@ -388,9 +440,7 @@ const TeamPage: React.FC = () => {
                           {user.username}
                         </label>
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-sm text-gray-500">
-                        {user.email}
-                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
                       <td className="px-2 py-2 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                           {user.role}
@@ -415,10 +465,8 @@ const TeamPage: React.FC = () => {
             <div className="flex items-center justify-between mt-4">
               <div className="text-sm text-gray-700">
                 Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{" "}
-                <span className="font-medium">
-                  {Math.min(indexOfLastItem, filteredAndSearchedUsers.length)}
-                </span>{" "}
-                of <span className="font-medium">{filteredAndSearchedUsers.length}</span> users
+                <span className="font-medium">{Math.min(indexOfLastItem, filteredAndSearchedUsers.length)}</span> of{" "}
+                <span className="font-medium">{filteredAndSearchedUsers.length}</span> users
               </div>
               <div className="flex space-x-2">
                 <button
@@ -473,9 +521,7 @@ const TeamPage: React.FC = () => {
                 <dd className="mt-1 text-sm text-gray-900">
                   {supervisor ? (
                     <div>
-                      <div>
-                        {supervisor.username} 
-                      </div>
+                      <div>{supervisor.username}</div>
                       <div className="mt-1">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green text-white">
                           {supervisor.supervisoryLevel?.level || "No Level"}
@@ -498,13 +544,22 @@ const TeamPage: React.FC = () => {
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th
+                              scope="col"
+                              className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
                               Username
                             </th>
-                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th
+                              scope="col"
+                              className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
                               Role
                             </th>
-                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th
+                              scope="col"
+                              className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
                               Level
                             </th>
                           </tr>
@@ -514,9 +569,7 @@ const TeamPage: React.FC = () => {
                             const member = users.find((u) => u.id === memberId)
                             return member ? (
                               <tr key={memberId}>
-                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                  {member.username}
-                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{member.username}</td>
                                 <td className="px-4 py-2 whitespace-nowrap">
                                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                     {member.role}
@@ -633,15 +686,16 @@ const TeamPage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex flex-row justify-between items-center">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Create New Team</h1>
-      {NavigatetoViewAllTeams.map(({ path }) => (
-          <Link 
-          key={path}
-          to={path}
-          className="bg-green outline-none text-white px-5  py-2 rounded-md flex flex-row items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Create New Team</h1>
+        {NavigatetoViewAllTeams.map(({ path }) => (
+          <Link
+            key={path}
+            to={path}
+            className="bg-green outline-none text-white px-5  py-2 rounded-md flex flex-row items-center justify-between gap-2"
+          >
             View All Teams
           </Link>
-           ))}
+        ))}
       </div>
 
       {error && (

@@ -427,7 +427,7 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
             <Button
               onClick={handleRemoveUsers}
               disabled={selectedUserIds.length === 0 || isRemovingMembers}
-              className="bg-red text-white hover:bg-red-600"
+              className="bg-red-600 text-white hover:bg-red-600"
             >
               {isRemovingMembers ? (
                 <>

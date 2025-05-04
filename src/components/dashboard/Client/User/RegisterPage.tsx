@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 "use client"
 
 import React from "react"
@@ -15,6 +13,7 @@ import {
   clearError,
   fetchPositions,
   resetSuccess,
+  fetchOrganizationDepartments,
 } from "../../../../Redux/Slices/RegisterSlice"
 import type { AppDispatch, RootState } from "../../../../Redux/store"
 import { ChevronDown, ChevronUp, Check, Briefcase, AlertCircle } from "lucide-react"
@@ -25,7 +24,6 @@ const validationSchema = Yup.object().shape({
   firstName: Yup.string().required("First Name is required"),
   telephone: Yup.string().required("Telephone Number is required"),
   email: Yup.string().email("Invalid email").required("Email is required"),
-  group_id: Yup.number().required("Holding Company is required"),
   department_id: Yup.number().required("Department is required"),
   supervisoryLevelId: Yup.number().required("Supervisory Level is required"),
   position_id: Yup.number().required("Employee Position is required"),
@@ -33,10 +31,10 @@ const validationSchema = Yup.object().shape({
 
 const RegisterPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
-  const { holdingCompanies, supervisoryLevels, positions, loading, error, success } = useSelector(
+  const { holdingCompanies, supervisoryLevels, positions, loading, error, success, organizationStructure } = useSelector(
     (state: RootState) => state.register,
   )
-  const [selectedHoldingCompany, setSelectedHoldingCompany] = useState<any>(null)
+  const { user } = useSelector((state: RootState) => state.login)
   const [selectedSubsidiary, setSelectedSubsidiary] = useState<any>(null)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     personalInfo: true,
@@ -45,6 +43,7 @@ const RegisterPage: React.FC = () => {
   const [formCompletion, setFormCompletion] = useState(0)
   const [formValues, setFormValues] = useState<any>({})
   const [formikValues, setFormikValues] = useState<any>({})
+  const hasSubsidiaries = user?.organization?.hasSubsidiaries || false
 
   const calculateFormCompletion = useCallback(
     (values: any) => {
@@ -53,7 +52,6 @@ const RegisterPage: React.FC = () => {
         "firstName",
         "telephone",
         "email",
-        "group_id",
         "department_id",
         "supervisoryLevelId",
         "position_id",
@@ -67,21 +65,54 @@ const RegisterPage: React.FC = () => {
       const totalFields = requiredFields.length
       let totalRequired = totalFields
 
-      if (selectedHoldingCompany?.subsidiaries?.length > 0) {
+      if (hasSubsidiaries) {
         totalRequired += 1
         if (values.company_id) filledFields += 1
       }
 
       return Math.floor((filledFields / totalRequired) * 100)
     },
-    [selectedHoldingCompany],
+    [hasSubsidiaries],
   )
 
+  // Helper function to get supervisory level from selected position
+  const getSupervisoryLevelFromPosition = useCallback((positionId: number) => {
+    const selectedPosition = positions.find(pos => pos.id === positionId)
+    return selectedPosition?.supervisoryLevel?.id || ""
+  }, [positions])
+
+  // Helper function to get department from selected position
+  const getDepartmentFromPosition = useCallback((positionId: number) => {
+    const selectedPosition = positions.find(pos => pos.id === positionId)
+    return selectedPosition?.department?.id || ""
+  }, [positions])
+
+  // Helper function to get filtered positions based on selected company
+  const getFilteredPositions = useCallback(() => {
+    if (!hasSubsidiaries || !selectedSubsidiary) {
+      // If no subsidiaries or no company selected, show all positions
+      return positions
+    }
+    
+    // Filter positions by the selected company ID
+    return positions.filter(position => 
+      position.company && position.company.id === selectedSubsidiary.id
+    )
+  }, [positions, selectedSubsidiary, hasSubsidiaries])
+
   useEffect(() => {
+    // Fetch holding companies, which now returns the complete organization structure
     dispatch(fetchHoldingCompanies())
+    
+    // Always fetch supervisory levels and positions
     dispatch(fetchSupervisoryLevels())
     dispatch(fetchPositions())
-  }, [dispatch])
+    
+    // If the organization doesn't have subsidiaries, fetch departments directly
+    if (!hasSubsidiaries) {
+      dispatch(fetchOrganizationDepartments())
+    }
+  }, [dispatch, hasSubsidiaries])
 
   useEffect(() => {
     if (success) {
@@ -110,7 +141,6 @@ const RegisterPage: React.FC = () => {
   const handleReset = useCallback(
     (resetForm: () => void) => {
       resetForm()
-      setSelectedHoldingCompany(null)
       setSelectedSubsidiary(null)
       dispatch(resetSuccess()) // Reset the success state in Redux
     },
@@ -159,6 +189,16 @@ const RegisterPage: React.FC = () => {
     )
   }
 
+  const getDepartmentOptions = () => {
+    if (!organizationStructure) return []
+    
+    if (selectedSubsidiary) {
+      return selectedSubsidiary.departments || []
+    }
+    
+    return organizationStructure.departments || []
+  }
+
   return (
     <div className="h-[100vh] mt-10 from-purple-100 via-white to-purple-50 flex items-center justify-center py-2 px-4 sm:px-6 lg:px-8">
       <motion.div
@@ -174,7 +214,6 @@ const RegisterPage: React.FC = () => {
             firstName: "",
             telephone: "",
             email: "",
-            group_id: "",
             company_id: "",
             department_id: "",
             supervisoryLevelId: "",
@@ -185,9 +224,8 @@ const RegisterPage: React.FC = () => {
             const errors: Record<string, string> = {}
 
             if (
-              selectedHoldingCompany?.subsidiaries?.length > 0 &&
-              !values.company_id &&
-              !selectedHoldingCompany.departments.find((d: any) => d.id === Number(values.department_id))
+              hasSubsidiaries &&
+              !values.company_id
             ) {
               errors.company_id = "Subsidiary is required"
             }
@@ -198,12 +236,20 @@ const RegisterPage: React.FC = () => {
             setSubmitting(true)
             const userData = {
               ...values,
-              group_id: Number(values.group_id),
               department_id: Number(values.department_id),
               supervisoryLevelId: Number(values.supervisoryLevelId),
-              ...(values.company_id && { company_id: Number(values.company_id) }),
-              ...(values.position_id && { position_id: Number(values.position_id) }),
+              position_id: Number(values.position_id),
             }
+
+            // FIXED: Handle company assignment based on subsidiaries
+            if (hasSubsidiaries && values.company_id) {
+              // If organization has subsidiaries and a company is selected, use the selected company
+              userData.company_id = Number(values.company_id)
+            } else if (!hasSubsidiaries) {
+              // If organization doesn't have subsidiaries, use organization ID as company ID
+              userData.company_id = user?.organization?.id || organizationStructure?.id
+            }
+            // If hasSubsidiaries is true but no company_id is selected, company will be null (validation should prevent this)
 
             dispatch(registerUser(userData))
               .unwrap()
@@ -237,7 +283,7 @@ const RegisterPage: React.FC = () => {
                 </div>
                 <div className="text-sm text-gray-500 text-right">Completion: {formCompletion}%</div>
 
-                <div className="bg-gray-50 p-4 rounded-md">
+                <div className="bg-gray-50 p-4 rounded-md pb-0">
                   <div
                     className="flex items-center justify-between cursor-pointer"
                     onClick={() => toggleSection("personalInfo")}
@@ -299,6 +345,51 @@ const RegisterPage: React.FC = () => {
                         />
                         <ErrorMessage name="email" component="div" className="mt-1 text-sm text-red" />
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-md pt-0">
+                  {expandedSections.companyInfo && (
+                    <div className="mt-4 space-y-4">
+                      {/* Only show subsidiary selection if organization has subsidiaries */}
+                      {hasSubsidiaries && organizationStructure && organizationStructure.subsidiaries && (
+                        <div>
+                          <label htmlFor="company_id" className="block text-sm font-medium text-gray-700">
+                            Select Subsidiary Company
+                          </label>
+                          <Field
+                            as="select"
+                            name="company_id"
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green"
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                              const companyId = Number(e.target.value)
+                              setFieldValue("company_id", companyId || "")
+                              setFieldValue("department_id", "")
+                              // Also reset position when company changes
+                              setFieldValue("position_id", "")
+                              setFieldValue("supervisoryLevelId", "")
+                              
+                              if (companyId) {
+                                const selectedSub = organizationStructure.subsidiaries.find(
+                                  (sub: any) => sub.id === companyId
+                                )
+                                setSelectedSubsidiary(selectedSub)
+                              } else {
+                                setSelectedSubsidiary(null)
+                              }
+                            }}
+                          >
+                            <option value="">Select Company</option>
+                            {organizationStructure.subsidiaries?.map((sub: any) => (
+                              <option key={sub.id} value={sub.id}>
+                                {sub.name}
+                              </option>
+                            ))}
+                          </Field>
+                          <ErrorMessage name="company_id" component="div" className="mt-1 text-sm text-red" />
+                        </div>
+                      )}
 
                       <div>
                         <label htmlFor="position_id" className="block text-sm font-medium text-gray-700">
@@ -312,100 +403,48 @@ const RegisterPage: React.FC = () => {
                             as="select"
                             name="position_id"
                             className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green"
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                              const positionId = Number(e.target.value)
+                              setFieldValue("position_id", positionId || "")
+                              
+                              // Auto-fill supervisory level and department when position is selected
+                              if (positionId) {
+                                const supervisoryLevelId = getSupervisoryLevelFromPosition(positionId)
+                                const departmentId = getDepartmentFromPosition(positionId)
+                                
+                                if (supervisoryLevelId) {
+                                  setFieldValue("supervisoryLevelId", supervisoryLevelId)
+                                }
+                                if (departmentId) {
+                                  setFieldValue("department_id", departmentId)
+                                }
+                              } else {
+                                // Clear supervisory level and department if no position is selected
+                                setFieldValue("supervisoryLevelId", "")
+                                setFieldValue("department_id", "")
+                              }
+                            }}
                           >
-                            <option value="">Select Position</option>
-                            {positions.map((pos) => (
+                            <option value="">
+                              {hasSubsidiaries && !values.company_id 
+                                ? "Please select a company first" 
+                                : "Select Position"
+                              }
+                            </option>
+                            {getFilteredPositions().map((pos) => (
                               <option key={pos.id} value={pos.id}>
                                 {pos.title}
                               </option>
                             ))}
                           </Field>
                         </div>
-                        <p className="mt-2 text-sm text-gray-500">
-                          The position determines the user's role and responsibilities within the organization.
-                        </p>
                         <ErrorMessage name="position_id" component="div" className="mt-1 text-sm text-red" />
+                        {hasSubsidiaries && !values.company_id && (
+                          <p className="mt-1 text-sm text-gray-500">
+                            Please select a company to see available positions
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => toggleSection("companyInfo")}
-                  >
-                    <h3 className="text-lg font-medium">Company Information</h3>
-                    {expandedSections.companyInfo ? (
-                      <ChevronUp className="h-5 w-5 text-gray-500" />
-                    ) : (
-                      <ChevronDown className="h-5 w-5 text-gray-500" />
-                    )}
-                  </div>
-
-                  {expandedSections.companyInfo && (
-                    <div className="mt-4 space-y-4">
-                      <div>
-                        <label htmlFor="group_id" className="block text-sm font-medium text-gray-700">
-                          Holding Company
-                        </label>
-                        <Field
-                          as="select"
-                          name="group_id"
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green"
-                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                            const groupId = Number(e.target.value)
-                            setFieldValue("group_id", groupId)
-                            setFieldValue("company_id", "")
-                            setFieldValue("department_id", "")
-                            const selected = holdingCompanies.find((hc) => hc.id === groupId)
-                            setSelectedHoldingCompany(selected)
-                            setSelectedSubsidiary(null)
-                          }}
-                        >
-                          <option value="">Select Holding Company</option>
-                          {holdingCompanies?.map((hc) => (
-                            <option key={hc.id} value={hc.id}>
-                              {hc.groupName}
-                            </option>
-                          ))}
-                        </Field>
-                        <ErrorMessage name="group_id" component="div" className="mt-1 text-sm text-red" />
-                      </div>
-
-                      {selectedHoldingCompany && selectedHoldingCompany.subsidiaries?.length > 0 && (
-                        <div>
-                          <label htmlFor="company_id" className="block text-sm font-medium text-gray-700">
-                            Subsidiary (Optional if using holding company departments)
-                          </label>
-                          <Field
-                            as="select"
-                            name="company_id"
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green"
-                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                              const companyId = Number(e.target.value)
-                              setFieldValue("company_id", companyId || "")
-                              setFieldValue("department_id", "")
-                              if (companyId) {
-                                const selectedSub = selectedHoldingCompany.subsidiaries.find(
-                                  (sub: any) => sub.id === companyId,
-                                )
-                                setSelectedSubsidiary(selectedSub)
-                              } else {
-                                setSelectedSubsidiary(null)
-                              }
-                            }}
-                          >
-                            <option value="">Select Subsidiary</option>
-                            {selectedHoldingCompany.subsidiaries.map((sub: any) => (
-                              <option key={sub.id} value={sub.id}>
-                                {sub.name}
-                              </option>
-                            ))}
-                          </Field>
-                          <ErrorMessage name="company_id" component="div" className="mt-1 text-sm text-red" />
-                        </div>
-                      )}
 
                       <div>
                         <label htmlFor="department_id" className="block text-sm font-medium text-gray-700">
@@ -414,31 +453,26 @@ const RegisterPage: React.FC = () => {
                         <Field
                           as="select"
                           name="department_id"
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green"
-                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                            const departmentId = Number(e.target.value)
-                            setFieldValue("department_id", departmentId)
-                          }}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green bg-gray-50"
+                          disabled={!!values.position_id} // Disable when position is selected (auto-filled)
                         >
-                          <option value="">Select Department</option>
-                          {selectedHoldingCompany &&
-                            !values.company_id &&
-                            selectedHoldingCompany.departments?.map((dept: any) => (
-                              <option key={dept.id} value={dept.id}>
-                                {dept.name}
-                              </option>
-                            ))}
-
-                          {selectedSubsidiary &&
-                            selectedSubsidiary.departments?.map((dept: any) => (
-                              <option key={dept.id} value={dept.id}>
-                                {dept.name}
-                              </option>
-                            ))}
+                          <option value="">
+                            {values.position_id ? "Auto-filled from position" : "Select Department"}
+                          </option>
+                          {getDepartmentOptions().map((dept: any) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
                         </Field>
                         <ErrorMessage name="department_id" component="div" className="mt-1 text-sm text-red" />
+                        {values.position_id && (
+                          <p className="mt-1 text-sm text-gray-500">
+                            Department is automatically filled based on the selected position
+                          </p>
+                        )}
                       </div>
-
+                      
                       <div>
                         <label htmlFor="supervisoryLevelId" className="block text-sm font-medium text-gray-700">
                           Supervisory Level
@@ -446,9 +480,12 @@ const RegisterPage: React.FC = () => {
                         <Field
                           as="select"
                           name="supervisoryLevelId"
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green"
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green focus:border-green bg-gray-50"
+                          disabled={!!values.position_id} // Disable when position is selected (auto-filled)
                         >
-                          <option value="">Select Supervisory Level</option>
+                          <option value="">
+                            {values.position_id ? "Auto-filled from position" : "Select Supervisory Level"}
+                          </option>
                           {supervisoryLevels?.map((level) => (
                             <option key={level.id} value={level.id}>
                               {level.level}
@@ -456,6 +493,11 @@ const RegisterPage: React.FC = () => {
                           ))}
                         </Field>
                         <ErrorMessage name="supervisoryLevelId" component="div" className="mt-1 text-sm text-red" />
+                        {values.position_id && (
+                          <p className="mt-1 text-sm text-gray-500">
+                            Supervisory level is automatically filled based on the selected position
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -510,4 +552,3 @@ const RegisterPage: React.FC = () => {
 }
 
 export default RegisterPage
-

@@ -4,6 +4,7 @@ import { showErrorToast, showSuccessToast } from "../../utilis/ToastProps"
 import type { NavigateFunction } from "react-router-dom"
 
 interface User {
+  name: string
   organization: any
   id: number
   username: string
@@ -18,6 +19,7 @@ interface User {
     id: number
     name: string
   }
+  profilePictureUrl: string | null
 }
 
 interface LoginCredentials {

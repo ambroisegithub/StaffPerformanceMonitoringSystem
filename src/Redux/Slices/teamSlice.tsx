@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit"
 import axios from "axios"
-import { RootState } from "../store"
+import type { RootState } from "../store"
 
 export interface User {
   id: number
@@ -47,7 +47,6 @@ export interface SupervisoryLevel {
   }
 }
 
-
 interface TeamState {
   teams: Team[]
   users: User[]
@@ -68,11 +67,56 @@ interface TeamState {
     organizationId?: number
   }
 }
-// Helper function to determine if a level is lower than another
+
+// Enhanced helper function to determine hierarchical access
+export const canSupervisorAccessUser = (
+  supervisorLevel: string,
+  supervisorRole: string,
+  userLevel: string,
+  userRole: string,
+): boolean => {
+  // Admin/Overall role can access all users
+  if (supervisorRole === "admin" || supervisorRole === "overall") {
+    return true
+  }
+
+  // Overall level can access all non-admin users
+  if (supervisorLevel === "Overall") {
+    return userRole !== "admin" && userRole !== "overall"
+  }
+
+  // Handle "None" level users (employees with no specific level)
+  if (userLevel === "None") {
+    return true // Any supervisor can access users with "None" level
+  }
+
+  // Extract numeric levels from "Level X" format
+  const supervisorMatch = supervisorLevel.match(/Level (\d+)/i)
+  const userMatch = userLevel.match(/Level (\d+)/i)
+
+  if (supervisorMatch && userMatch) {
+    const supervisorNum = Number.parseInt(supervisorMatch[1], 10)
+    const userNum = Number.parseInt(userMatch[1], 10)
+
+    // Supervisor can access users with level n-1 (lower level numbers)
+    return userNum < supervisorNum
+  }
+
+  // If supervisor has a level but user doesn't have a numeric level
+  if (supervisorMatch && !userMatch) {
+    // Can access users with "None" level or employees
+    return userLevel === "None" || userRole === "employee"
+  }
+
+  // Default: no access if levels can't be compared
+  return false
+}
+
+// Helper function to determine if a level is lower than another (kept for backward compatibility)
 export const isLowerLevel = (memberLevel: string, supervisorLevel: string): boolean => {
-  // Special case for "Employee" level (lowest)
-  if (memberLevel === "Employee") return true
-  if (supervisorLevel === "Employee") return false
+  // Special case for "None" level (lowest, accessible by all supervisors)
+  if (memberLevel === "None") return true
+  if (supervisorLevel === "None") return false
 
   // Special case for "Overall" level (highest)
   if (supervisorLevel === "Overall") return true
@@ -92,29 +136,26 @@ export const isLowerLevel = (memberLevel: string, supervisorLevel: string): bool
   return memberLevel < supervisorLevel
 }
 
-export const fetchAllUsers = createAsyncThunk(
-  "team/fetchAllUsers", 
-  async (_, { rejectWithValue, getState }) => {
-    try {
-      const state = getState() as RootState
-      const organizationId = state.login.user?.organization?.id
-      
-      if (!organizationId) {
-        throw new Error("Organization ID is missing")
-      }
+export const fetchAllUsers = createAsyncThunk("team/fetchAllUsers", async (_, { rejectWithValue, getState }) => {
+  try {
+    const state = getState() as RootState
+    const organizationId = state.login.user?.organization?.id
 
-      const token = localStorage.getItem("token")
-      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      return response.data.data
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || "Failed to fetch users")
+    if (!organizationId) {
+      throw new Error("Organization ID is missing")
     }
+
+    const token = localStorage.getItem("token")
+    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    return response.data.data
+  } catch (error: any) {
+    return rejectWithValue(error.response?.data?.message || "Failed to fetch users")
   }
-)
+})
 
 export const fetchSupervisoryLevels = createAsyncThunk(
   "team/fetchSupervisoryLevels",
@@ -122,7 +163,7 @@ export const fetchSupervisoryLevels = createAsyncThunk(
     try {
       const state = getState() as RootState
       const organizationId = state.login.user?.organization?.id
-      
+
       if (!organizationId) {
         throw new Error("Organization ID is missing")
       }
@@ -137,72 +178,65 @@ export const fetchSupervisoryLevels = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || "Failed to fetch supervisory levels")
     }
-  }
+  },
 )
 
 export const createTeam = createAsyncThunk(
   "team/createTeam",
   async (
-    teamData: { 
+    teamData: {
       name: string
       description: string
       supervisorId: number
       memberIds: number[]
     },
-    { rejectWithValue, getState }
+    { rejectWithValue, getState },
   ) => {
     try {
       const state = getState() as RootState
       const organizationId = state.login.user?.organization?.id
-      
+
       if (!organizationId) {
         throw new Error("Organization ID is missing")
       }
 
       const token = localStorage.getItem("token")
       const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/v1/teams`, 
+        `${import.meta.env.VITE_BASE_URL}/v1/teams`,
         { ...teamData, organization_id: organizationId },
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       )
       return response.data
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || "Failed to create team")
     }
-  }
+  },
 )
 
-export const fetchTeams = createAsyncThunk(
-  "team/fetchTeams", 
-  async (_, { rejectWithValue, getState }) => {
-    try {
-      const state = getState() as RootState
-      const organizationId = state.login.user?.organization?.id
-      
-      if (!organizationId) {
-        throw new Error("Organization ID is missing")
-      }
+export const fetchTeams = createAsyncThunk("team/fetchTeams", async (_, { rejectWithValue, getState }) => {
+  try {
+    const state = getState() as RootState
+    const organizationId = state.login.user?.organization?.id
 
-      const token = localStorage.getItem("token")
-      const response = await axios.get(
-        `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/teams`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
-      return response.data.data
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || "Failed to fetch teams")
+    if (!organizationId) {
+      throw new Error("Organization ID is missing")
     }
-  }
-)
 
+    const token = localStorage.getItem("token")
+    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/teams`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    return response.data.data
+  } catch (error: any) {
+    return rejectWithValue(error.response?.data?.message || "Failed to fetch teams")
+  }
+})
 
 // Initial state
 const initialState: TeamState = {
@@ -240,24 +274,24 @@ const teamSlice = createSlice({
       state.formData.supervisorId = action.payload
       state.selectedSupervisor = state.users.find((user) => user.id === action.payload) || null
 
-      // Filter eligible members based on selected supervisor
+      // Filter eligible members based on selected supervisor using enhanced logic
       if (state.selectedSupervisor) {
         const supervisor = state.selectedSupervisor
-        const supervisorLevel = supervisor.supervisoryLevel?.level || "Employee"
+        const supervisorLevel = supervisor.supervisoryLevel?.level || "None"
+        const supervisorRole = supervisor.role
 
-        if (supervisor.role === "admin") {
-          // Admin can add anyone
-          state.filteredUsers = state.users
-        } else if (supervisorLevel === "Overall") {
-          // Overall supervisors can add all non-admin users
-          state.filteredUsers = state.users.filter((user) => user.role !== "admin")
-        } else {
-          // Other supervisors can only add users with lower levels
-          state.filteredUsers = state.users.filter((user) => {
-            const memberLevel = user.supervisoryLevel?.level || "Employee"
-            return isLowerLevel(memberLevel, supervisorLevel)
-          })
-        }
+        // Filter users based on hierarchical access rules
+        state.filteredUsers = state.users.filter((user) => {
+          // Don't include the supervisor themselves
+          if (user.id === supervisor.id) {
+            return false
+          }
+
+          const userLevel = user.supervisoryLevel?.level || "None"
+          const userRole = user.role
+
+          return canSupervisorAccessUser(supervisorLevel, supervisorRole, userLevel, userRole)
+        })
       } else {
         state.filteredUsers = []
       }
@@ -362,4 +396,3 @@ export const { setCurrentStep, updateFormData, selectSupervisor, toggleMember, r
   teamSlice.actions
 
 export default teamSlice.reducer
-

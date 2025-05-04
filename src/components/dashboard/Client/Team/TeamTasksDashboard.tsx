@@ -1,76 +1,68 @@
-// @ts-nocheck
-
 "use client"
 
 import { useEffect, useState } from "react"
 import { useAppDispatch, useAppSelector } from "../../../../Redux/hooks"
 import {
-  fetchAdminTeamTasks,
-  selectAdminTeamTasks,
-  selectAdminTeamTasksLoading,
-  selectAdminTeamTasksError,
+  fetchAllDailyTasks,
+  selectAllDailyTasks,
+  selectLoading,
+  selectError,
   selectPagination,
   selectFilters,
   setFilters,
-  selectSelectedTask,
+  resetFilters
 } from "../../../../Redux/Slices/TaskReviewSlice"
-import { format, subDays } from "date-fns"
 import withAdminAuth from "../../../Auth/withAdminAuth"
-import TeamList from "./TeamList"
-import TeamFilterSection from "./TeamFilterSection"
-import TeamTaskReviewModal from "./TeamTaskReviewModal"
-import { Card, CardContent } from "../../../ui/Card"
-import { AlertCircle, BarChart2, ListIcon } from "lucide-react"
-import Pagination from "../Position/Pagination"
-import TeamTaskReportComponent from "./TaskReportComponent"
-import { Button } from "../../../ui/button"
+import OverAllTaskList from "./OverAllTaskList"
+import TaskReviewModal from "./TaskReviewModal"
+import OverAllFilterSection from "./OverAllFilterSection"
+import Pagination from "../Tasks/Pagination"
+import { useNavigate } from "react-router-dom"
+import TaskReportComponent from "./TaskReportComponent"
 import React from "react"
+import TaskWarningSectionForOverall from "./TaskWarningSectionForOverall"
 
 const TeamTasksDashboard = () => {
   const dispatch = useAppDispatch()
-  const adminTeamTasks = useAppSelector(selectAdminTeamTasks)
-  const loading = useAppSelector(selectAdminTeamTasksLoading)
-  const error = useAppSelector(selectAdminTeamTasksError)
+  const allDailyTasks = useAppSelector(selectAllDailyTasks)
+  const loading = useAppSelector(selectLoading)
+  const error = useAppSelector(selectError)
   const pagination = useAppSelector(selectPagination)
   const filters = useAppSelector(selectFilters)
-  const selectedTask = useAppSelector(selectSelectedTask)
-  const user = useAppSelector((state: { login: { user: any } }) => state.login.user)
+  const user = useAppSelector((state) => state.login.user)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<"list" | "report">("list")
+  const [showFilters, setShowFilters] = useState(false)
+  const navigate = useNavigate()
+
+  // Check if any filters are active
+  const hasActiveFilters = !!(
+    filters.userName ||
+    filters.status ||
+    filters.startDate ||
+    filters.endDate ||
+    filters.department ||
+    filters.company
+  )
 
   useEffect(() => {
-    // Set default date range to last 30 days if not already set
-    if (!filters.startDate || !filters.endDate) {
-      const endDate = new Date()
-      const startDate = subDays(endDate, 30)
-
+    const organizationId = user?.organization?.id
+    if (organizationId) {
       dispatch(
-        setFilters({
-          ...filters,
-          startDate: format(startDate, "yyyy-MM-dd"),
-          endDate: format(endDate, "yyyy-MM-dd"),
-        }),
-      )
-    }
-  }, [dispatch, filters])
-
-  useEffect(() => {
-    if (user?.id) {
-      dispatch(
-        fetchAdminTeamTasks({
-          userId: user.id,
+        fetchAllDailyTasks({
+          organizationId,
           page: pagination.current_page,
           filters,
         }),
       )
     }
-  }, [dispatch, user?.id, pagination.current_page, filters])
+  }, [dispatch, user, pagination.current_page, filters])
 
   const handlePageChange = (page: number) => {
-    if (user?.id) {
+    const organizationId = user?.organization?.id
+    if (organizationId) {
       dispatch(
-        fetchAdminTeamTasks({
-          userId: user.id,
+        fetchAllDailyTasks({
+          organizationId,
           page,
           filters,
         }),
@@ -80,6 +72,20 @@ const TeamTasksDashboard = () => {
 
   const handleFilterChange = (newFilters: any) => {
     dispatch(setFilters(newFilters))
+  }
+
+  const handleClearFilters = () => {
+    dispatch(resetFilters())
+  }
+
+  const handleOpenFilters = () => {
+    setShowFilters(true)
+    setTimeout(() => {
+      const filterSection = document.querySelector("[data-filter-section]")
+      if (filterSection) {
+        filterSection.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
+    }, 100)
   }
 
   const handleOpenModal = () => {
@@ -92,69 +98,74 @@ const TeamTasksDashboard = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+      <div className="flex flex-row items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Team Tasks Dashboard</h1>
-          <p className="text-gray-600 mt-2">Review and manage tasks across all teams in the organization</p>
+          <h1 className="text-3xl font-bold text-gray-800">Task Review Dashboard</h1>
+          <p className="text-gray-600 mt-2">Review and manage all tasks across the organization</p>
         </div>
-        <div className="mt-4 md:mt-0 flex flex-col md:flex-row items-start md:items-center gap-4">
-          <div className="flex gap-2">
-            <Button
-              variant={viewMode === "list" ? "default" : "outline"}
-              onClick={() => setViewMode("list")}
-              className="flex items-center gap-2"
-            >
-              <ListIcon className="h-4 w-4" />
-              List View
-            </Button>
-            <Button
-              variant={viewMode === "report" ? "default" : "outline"}
-              onClick={() => setViewMode("report")}
-              className="flex items-center gap-2"
-            >
-              <BarChart2 className="h-4 w-4" />
-              Report View
-            </Button>
-          </div>
-          <p className="text-sm text-gray-600">
-            Administrator: {user?.firstName} {user?.lastName}
-          </p>
+        <div className="flex items-center gap-4">
+          <p className="text-xl font-bold text-gray-600">{user?.organization?.name}</p>
         </div>
       </div>
 
-      <TeamFilterSection filters={filters} onFilterChange={handleFilterChange} teamTasks={adminTeamTasks} />
+      {/* Filter Section */}
+      <div data-filter-section>
+        <OverAllFilterSection filters={filters} onFilterChange={handleFilterChange} />
+      </div>
 
       {error && (
-        <Card className="mb-6 border-red">
-          <CardContent className="p-4 flex items-start">
-            <AlertCircle className="h-5 w-5 text-red mr-2 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-red">Error</h3>
-              <p className="text-sm text-red">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="border border-red-500 text-red-500 px-4 py-3 rounded mb-4">
+          <p>{error}</p>
+        </div>
       )}
 
-      {viewMode === "list" ? (
-        <>
-          <TeamList teamTasks={adminTeamTasks} loading={loading} onOpenReviewModal={handleOpenModal} />
-
-          <Pagination
-            currentPage={pagination.current_page}
-            totalPages={pagination.total_pages}
-            onPageChange={handlePageChange}
-            totalItems={pagination.total_items}
+      {/* Conditional rendering based on filter state */}
+      {!hasActiveFilters ? (
+        <div className="space-y-6">
+          <TaskWarningSectionForOverall
+            hasActiveFilters={false}
+            totalTaskCount={0}
+            filterSummary={{
+              searchTerm: "",
+              userNameFilter: undefined,
+              statusFilter: undefined,
+              dateRangeFilter: undefined,
+            }}
+            onClearFilters={handleClearFilters}
+            onOpenFilters={handleOpenFilters}
           />
-        </>
+        </div>
       ) : (
-        <TeamTaskReportComponent teamTasks={adminTeamTasks} />
+        <div className="space-y-6">
+          {/* Task Report Component */}
+          {!loading && allDailyTasks && allDailyTasks.length > 0 && (
+            <TaskReportComponent teamTasks={allDailyTasks} />
+          )}
+
+          <OverAllTaskList
+            teamTasks={allDailyTasks}
+            loading={loading}
+            onOpenReviewModal={handleOpenModal}
+            filters={filters}
+            onClearFilters={handleClearFilters}
+            onOpenFilters={handleOpenFilters}
+          />
+
+          {/* Pagination */}
+          {allDailyTasks.length > 0 && (
+            <Pagination
+              currentPage={pagination.current_page}
+              totalPages={pagination.total_pages}
+              onPageChange={handlePageChange}
+              totalItems={pagination.total_items}
+            />
+          )}
+        </div>
       )}
 
-      <TeamTaskReviewModal isOpen={isModalOpen} onClose={handleCloseModal} adminId={user?.id || null} />
+      <TaskReviewModal isOpen={isModalOpen} onClose={handleCloseModal} />
     </div>
   )
 }
 
 export default withAdminAuth(TeamTasksDashboard)
-

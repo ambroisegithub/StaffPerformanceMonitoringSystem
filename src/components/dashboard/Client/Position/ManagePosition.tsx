@@ -16,12 +16,26 @@ import {
   clearSelectedPosition,
 } from "../../../../Redux/Slices/PositionSlices"
 import type { AppDispatch, RootState } from "../../../../Redux/store"
-import { Plus, Edit, Trash2, Search, X, AlertTriangle, RefreshCw, ChevronUp, ChevronDown, Filter } from "lucide-react"
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  X,
+  AlertTriangle,
+  RefreshCw,
+  ChevronUp,
+  ChevronDown,
+  Filter,
+  Building,
+  Award,
+} from "lucide-react"
 import { Formik, Form, Field, ErrorMessage } from "formik"
 import * as Yup from "yup"
 import Pagination from "./Pagination"
 import Loader from "../../../ui/Loader"
 import PositionReportCard from "./PositionReportCard"
+
 // Interfaces for API responses
 interface APIResponse<T> {
   success: boolean
@@ -35,7 +49,21 @@ interface IDepartment {
   company: {
     id: number
     name: string
+    tin: string | null
   } | null
+  organization: {
+    id: number
+    name: string
+    description: string
+  }
+}
+
+interface ISupervisoryLevel {
+  id: number
+  level: string
+  isActive: boolean
+  created_at: string
+  updated_at: string
 }
 
 interface ICompany {
@@ -50,12 +78,13 @@ interface ICompany {
 // Validation schema for edit form
 const validationSchema = Yup.object().shape({
   title: Yup.string().required("Position title is required"),
-  description: Yup.string().required("Position description is required"),
+  supervisory_level_id: Yup.string().required("Supervisory level is required"),
 })
 
 const ManagePosition: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const { positions, selectedPosition, loading, error } = useSelector((state: RootState) => state.positions)
+  const { user } = useSelector((state: RootState) => state.login)
 
   // Local state
   const [searchTerm, setSearchTerm] = useState("")
@@ -66,62 +95,84 @@ const ManagePosition: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
   const [companies, setCompanies] = useState<ICompany[]>([])
   const [departments, setDepartments] = useState<IDepartment[]>([])
+  const [supervisoryLevels, setSupervisoryLevels] = useState<ISupervisoryLevel[]>([])
   const [submissionAttempts, setSubmissionAttempts] = useState(0)
   const [isRateLimited, setIsRateLimited] = useState(false)
-  const [isDataLoading, setIsDataLoading] = useState(true) // Added state for data loading
+  const [isDataLoading, setIsDataLoading] = useState(true)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 5
 
-  // Fetch positions, companies, and departments on component mount
+  // Fetch positions, companies, departments, and supervisory levels on component mount
   useEffect(() => {
-    setIsDataLoading(true) // Set loading to true when starting to fetch data
+    setIsDataLoading(true)
 
     const fetchAllData = async () => {
       try {
-        const token = localStorage.getItem("token") // Retrieve token from localStorage
-        const organizationId = useSelector((state: RootState) => state.login.user?.organization?.id)
-        
+        const token = localStorage.getItem("token")
+        const organizationId = user?.organization?.id
+
         if (!organizationId) {
           throw new Error("Organization ID is missing")
         }
+
         // Fetch positions
         await dispatch(fetchPositions()).unwrap()
 
-        // Fetch companies
-        const companiesResponse = await axios.get<APIResponse<{ companies: ICompany[] }>>(
-          `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/companies`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`, // Include token in headers
-            },
-          }
-        )
-        if (companiesResponse.data.success && companiesResponse.data.data.companies) {
-          setCompanies(companiesResponse.data.data.companies)
-        }
-
         // Fetch departments
         const departmentsResponse = await axios.get<APIResponse<{ departments: IDepartment[] }>>(
-          `${import.meta.env.VITE_BASE_URL}/v1/departments`,
+          `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/departments`,
           {
             headers: {
-              Authorization: `Bearer ${token}`, // Include token in headers
+              Authorization: `Bearer ${token}`,
             },
-          }
+          },
         )
         if (departmentsResponse.data.success && departmentsResponse.data.data.departments) {
           setDepartments(departmentsResponse.data.data.departments)
         }
+
+        // Fetch supervisory levels
+        const supervisoryLevelsResponse = await axios.get<APIResponse<ISupervisoryLevel[]>>(
+          `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/supervisory-levels`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+        if (supervisoryLevelsResponse.data.success && supervisoryLevelsResponse.data.data) {
+          setSupervisoryLevels(supervisoryLevelsResponse.data.data)
+        }
+
+        // Fetch companies (optional for backward compatibility)
+        try {
+          const companiesResponse = await axios.get<APIResponse<{ companies: ICompany[] }>>(
+            `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/companies`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          )
+          if (companiesResponse.data.success && companiesResponse.data.data.companies) {
+            setCompanies(companiesResponse.data.data.companies)
+          }
+        } catch (companyError) {
+          console.log("Companies endpoint not available, continuing without company data")
+        }
       } catch (error) {
+        console.error("Error fetching data:", error)
       } finally {
-        setIsDataLoading(false) // Set loading to false when all data is fetched
+        setIsDataLoading(false)
       }
     }
 
-    fetchAllData()
-  }, [dispatch])
+    if (user?.organization?.id) {
+      fetchAllData()
+    }
+  }, [dispatch, user?.organization?.id])
 
   // Reset to first page when search or filter changes
   useEffect(() => {
@@ -186,7 +237,9 @@ const ManagePosition: React.FC = () => {
     const filteredPositions = [...positions].filter((position) => {
       const matchesSearch =
         position.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        position.description.toLowerCase().includes(searchTerm.toLowerCase())
+        (position.department?.name && position.department.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (position.supervisoryLevel?.level &&
+          position.supervisoryLevel.level.toLowerCase().includes(searchTerm.toLowerCase()))
 
       const matchesActiveFilter =
         activeFilter === "all" ? true : activeFilter === "active" ? position.isActive : !position.isActive
@@ -226,7 +279,7 @@ const ManagePosition: React.FC = () => {
 
   // Refresh data
   const handleRefresh = () => {
-    setIsDataLoading(true) // Show loader when refreshing
+    setIsDataLoading(true)
     dispatch(fetchPositions())
       .then(() => setIsDataLoading(false))
       .catch(() => setIsDataLoading(false))
@@ -251,7 +304,7 @@ const ManagePosition: React.FC = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full m-4 z-10"
+            className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-2xl sm:w-full m-4 z-10"
           >
             <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
               <div className="sm:flex sm:items-start">
@@ -261,10 +314,10 @@ const ManagePosition: React.FC = () => {
                     <Formik
                       initialValues={{
                         title: selectedPosition.title,
-                        description: selectedPosition.description,
                         isActive: selectedPosition.isActive,
                         company_id: selectedPosition.company?.id || "",
                         department_id: selectedPosition.department?.id || "",
+                        supervisory_level_id: selectedPosition.supervisoryLevel?.id || "",
                       }}
                       validationSchema={validationSchema}
                       onSubmit={async (values) => {
@@ -277,10 +330,10 @@ const ManagePosition: React.FC = () => {
 
                         const positionData = {
                           title: values.title,
-                          description: values.description,
                           isActive: values.isActive,
+                          department_id: Number(values.department_id),
+                          supervisory_level_id: Number(values.supervisory_level_id),
                           company_id: values.company_id ? Number(values.company_id) : null,
-                          department_id: values.department_id ? Number(values.department_id) : null,
                         }
 
                         try {
@@ -296,94 +349,176 @@ const ManagePosition: React.FC = () => {
                         }
                       }}
                     >
-                      {({ values, setFieldValue, isSubmitting }) => (
-                        <Form className="space-y-4">
-                          {/* Position Title */}
-                          <div>
-                            <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                              Position Title <span className="text-red">*</span>
-                            </label>
-                            <Field
-                              name="title"
-                              type="text"
-                              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                            <ErrorMessage name="title" component="div" className="mt-1 text-sm text-red" />
-                          </div>
+                      {({ values, setFieldValue, isSubmitting }) => {
+                        // Filter departments based on selected company
+                        const filteredDepartments = values.company_id
+                          ? departments.filter((dept) => dept.company && dept.company.id === Number(values.company_id))
+                          : departments
 
-                          {/* Position Description */}
-                          <div>
-                            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                              Description <span className="text-red">*</span>
-                            </label>
-                            <Field
-                              as="textarea"
-                              name="description"
-                              rows={4}
-                              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                            <ErrorMessage name="description" component="div" className="mt-1 text-sm text-red" />
-                          </div>
+                        // Get selected department details
+                        const selectedDepartment = departments.find((dept) => dept.id === Number(values.department_id))
 
-                          {/* Active Status */}
-                          <div className="flex items-center">
-                            <Field
-                              type="checkbox"
-                              name="isActive"
-                              id="isActive"
-                              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                            />
-                            <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
-                              Active
-                            </label>
-                          </div>
-                          <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                            <button
-                              type="submit"
-                              disabled={isSubmitting || isRateLimited}
-                              className="w-full inline-flex justify-center bg-green rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isSubmitting ? (
-                                <>
-                                  <svg
-                                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
+                        return (
+                          <Form className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Position Title */}
+                              <div className="md:col-span-2">
+                                <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                                  Position Title <span className="text-red">*</span>
+                                </label>
+                                <Field
+                                  name="title"
+                                  type="text"
+                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                                />
+                                <ErrorMessage name="title" component="div" className="mt-1 text-sm text-red" />
+                              </div>
+
+                              {/* Department Selection */}
+                              <div>
+                                <label htmlFor="department_id" className="block text-sm font-medium text-gray-700">
+                                  <Building className="inline h-4 w-4 mr-1" />
+                                  Department <span className="text-red">*</span>
+                                </label>
+                                <Field
+                                  as="select"
+                                  name="department_id"
+                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                    setFieldValue("department_id", e.target.value)
+                                  }}
+                                >
+                                  <option value="">Select a department</option>
+                                  {filteredDepartments.map((department) => (
+                                    <option key={department.id} value={department.id}>
+                                      {department.name}
+                                    </option>
+                                  ))}
+                                </Field>
+                                <ErrorMessage name="department_id" component="div" className="mt-1 text-sm text-red" />
+
+                              </div>
+
+                              {/* Supervisory Level Selection */}
+                              <div>
+                                <label
+                                  htmlFor="supervisory_level_id"
+                                  className="block text-sm font-medium text-gray-700"
+                                >
+                                  <Award className="inline h-4 w-4 mr-1" />
+                                  Supervisory Level <span className="text-red">*</span>
+                                </label>
+                                <Field
+                                  as="select"
+                                  name="supervisory_level_id"
+                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                                >
+                                  <option value="">Select supervisory level</option>
+                                  {supervisoryLevels
+                                    .filter((level) => level.isActive)
+                                    .map((level) => (
+                                      <option key={level.id} value={level.id}>
+                                        {level.level}
+                                      </option>
+                                    ))}
+                                </Field>
+                                <ErrorMessage
+                                  name="supervisory_level_id"
+                                  component="div"
+                                  className="mt-1 text-sm text-red"
+                                />
+                              </div>
+
+                              {/* Company Selection (Optional - for backward compatibility) */}
+                              {companies.length > 0 && (
+                                <div className="md:col-span-2">
+                                  <label htmlFor="company_id" className="block text-sm font-medium text-gray-700">
+                                    Company (Optional)
+                                  </label>
+                                  <Field
+                                    as="select"
+                                    name="company_id"
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                      setFieldValue("company_id", e.target.value)
+                                      setFieldValue("department_id", "") // Reset department when company changes
+                                    }}
                                   >
-                                    <circle
-                                      className="opacity-25"
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                      className="opacity-75"
-                                      fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    ></path>
-                                  </svg>
-                                  Updating...
-                                </>
-                              ) : (
-                                "Update Position"
+                                    <option value="">Select a company (optional)</option>
+                                    {companies.map((company) => (
+                                      <option key={company.id} value={company.id}>
+                                        {company.name}
+                                      </option>
+                                    ))}
+                                  </Field>
+                                  <ErrorMessage name="company_id" component="div" className="mt-1 text-sm text-red" />
+                                </div>
                               )}
-                            </button>
-                            <button
-                              type="button"
-                              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green sm:mt-0 sm:w-auto sm:text-sm"
-                              onClick={() => {
-                                setIsEditModalOpen(false)
-                                dispatch(clearSelectedPosition())
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </Form>
-                      )}
+
+
+
+                              {/* Active Status */}
+                              <div className="md:col-span-2 flex items-center">
+                                <Field
+                                  type="checkbox"
+                                  name="isActive"
+                                  id="isActive"
+                                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
+                                  Active
+                                </label>
+                              </div>
+                            </div>
+
+                            <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                              <button
+                                type="submit"
+                                disabled={isSubmitting || isRateLimited}
+                                className="w-full inline-flex justify-center bg-green rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isSubmitting ? (
+                                  <>
+                                    <svg
+                                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                      ></circle>
+                                      <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                      ></path>
+                                    </svg>
+                                    Updating...
+                                  </>
+                                ) : (
+                                  "Update Position"
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green sm:mt-0 sm:w-auto sm:text-sm"
+                                onClick={() => {
+                                  setIsEditModalOpen(false)
+                                  dispatch(clearSelectedPosition())
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </Form>
+                        )
+                      }}
                     </Formik>
                   </div>
                 </div>
@@ -420,7 +555,7 @@ const ManagePosition: React.FC = () => {
               <input
                 type="text"
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                placeholder="Search positions..."
+                placeholder="Search positions, departments, or supervisory levels..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -510,8 +645,15 @@ const ManagePosition: React.FC = () => {
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
-                      Description
+                      Department
                     </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Supervisory Level
+                    </th>
+ 
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
@@ -561,9 +703,28 @@ const ManagePosition: React.FC = () => {
                         <div className="text-sm font-medium text-gray-900">{position.title}</div>
                         {position.company && <div className="text-xs text-gray-500">{position.company.name}</div>}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-500 max-w-md truncate">{position.description}</div>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <Building className="h-4 w-4 text-gray-400 mr-2" />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {position.department?.name || "Not assigned"}
+                            </div>
+                            {position.department?.company && (
+                              <div className="text-xs text-gray-500">{position.department.company.name}</div>
+                            )}
+                          </div>
+                        </div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <Award className="h-4 w-4 text-gray-400 mr-2" />
+                          <span className="text-sm text-gray-900">
+                            {position.supervisoryLevel?.level || "Not assigned"}
+                          </span>
+                        </div>
+                      </td>
+             
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -686,5 +847,3 @@ const ManagePosition: React.FC = () => {
 }
 
 export default ManagePosition
-
-

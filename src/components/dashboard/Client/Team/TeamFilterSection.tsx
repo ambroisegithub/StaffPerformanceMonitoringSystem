@@ -29,7 +29,6 @@ interface TeamFilterSectionProps {
 
 const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilterChange, teamTasks = [] }) => {
   const [localFilters, setLocalFilters] = useState<TaskReviewFilters>(filters)
-  const [isExpanded, setIsExpanded] = useState(false)
   const [activeFiltersCount, setActiveFiltersCount] = useState(0)
 
   // Extract unique values for filter dropdowns
@@ -106,7 +105,6 @@ const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilter
   const handleApplyFilters = () => {
     onFilterChange(localFilters)
     if (window.innerWidth < 768) {
-      setIsExpanded(false)
     }
   }
 
@@ -154,11 +152,8 @@ const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilter
               </button>
             )}
             <button
-              onClick={() => setIsExpanded(!isExpanded)}
               className="flex items-center text-green hover:text-green-700 font-medium text-sm"
             >
-              {isExpanded ? "Hide Filters" : "Show Filters"}
-              <ChevronDown className={`ml-1 h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
             </button>
           </div>
         </div>
@@ -192,57 +187,12 @@ const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilter
               </Badge>
             )}
 
-            {localFilters.userLevel && (
-              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1 pl-2 pr-1 py-1">
-                <BarChart className="h-3 w-3 mr-1" />
-                Level: {localFilters.userLevel}
-                <button
-                  onClick={() => clearSingleFilter("userLevel")}
-                  className="ml-1 p-0.5 hover:bg-indigo-100 rounded-full"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            )}
+ 
 
-            {localFilters.company && (
-              <Badge className="bg-green text-white border-green flex items-center gap-1 pl-2 pr-1 py-1">
-                <Building className="h-3 w-3 mr-1" />
-                Company: {localFilters.company}
-                <button
-                  onClick={() => clearSingleFilter("company")}
-                  className="ml-1 p-0.5 hover:bg-green rounded-full"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            )}
+  
 
-            {localFilters.department && (
-              <Badge className="bg-yellow text-white border-yellow flex items-center gap-1 pl-2 pr-1 py-1">
-                <Briefcase className="h-3 w-3 mr-1" />
-                Department: {localFilters.department}
-                <button
-                  onClick={() => clearSingleFilter("department")}
-                  className="ml-1 p-0.5 hover:bg-yellow rounded-full"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            )}
+ 
 
-            {localFilters.project && (
-              <Badge className="bg-orange text-white border-orange flex items-center gap-1 pl-2 pr-1 py-1">
-                <FileText className="h-3 w-3 mr-1" />
-                Project: {localFilters.project}
-                <button
-                  onClick={() => clearSingleFilter("project")}
-                  className="ml-1 p-0.5 hover:bg-orange rounded-full"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            )}
 
             {(localFilters.startDate || localFilters.endDate) && (
               <Badge className="bg-red text-white border-red-200 flex items-center gap-1 pl-2 pr-1 py-1">
@@ -265,7 +215,6 @@ const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilter
 
       {/* Expandable Filter Content */}
       <AnimatePresence>
-        {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -316,69 +265,10 @@ const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilter
                 </div>
 
                 {/* Supervisor Filter */}
-                <div>
-                  <label htmlFor="supervisor" className="block text-sm font-medium text-gray-700 mb-1">
-                    Supervisor
-                  </label>
-                  <select
-                    id="supervisor"
-                    name="supervisor"
-                    value={localFilters.supervisor || ""}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="">All Supervisors</option>
-                    {uniqueValues.supervisors.map((supervisor) => (
-                      <option key={supervisor} value={supervisor}>
-                        {supervisor}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
-                {/* User Level Filter */}
-                <div>
-                  <label htmlFor="userLevel" className="block text-sm font-medium text-gray-700 mb-1">
-                    User Level
-                  </label>
-                  <select
-                    id="userLevel"
-                    name="userLevel"
-                    value={localFilters.userLevel || ""}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="">All Levels</option>
-                    {uniqueValues.userLevels.map((level) => (
-                      <option key={level} value={level}>
-                        {level}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                {/* Company Filter */}
-                <div>
-                  <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-                    Company
-                  </label>
-                  <select
-                    id="company"
-                    name="company"
-                    value={localFilters.company || ""}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="">All Companies</option>
-                    {uniqueValues.companies.map((company) => (
-                      <option key={company} value={company}>
-                        {company}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 {/* Department Filter */}
                 <div>
@@ -401,26 +291,6 @@ const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilter
                   </select>
                 </div>
 
-                {/* Project Filter */}
-                <div>
-                  <label htmlFor="project" className="block text-sm font-medium text-gray-700 mb-1">
-                    Project
-                  </label>
-                  <select
-                    id="project"
-                    name="project"
-                    value={localFilters.project || ""}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="">All Projects</option>
-                    {uniqueValues.projects.map((project) => (
-                      <option key={project} value={project}>
-                        {project}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 {/* Search Filter */}
                 <div>
@@ -488,7 +358,6 @@ const TeamFilterSection: React.FC<TeamFilterSectionProps> = ({ filters, onFilter
               </div>
             </div>
           </motion.div>
-        )}
       </AnimatePresence>
     </div>
   )

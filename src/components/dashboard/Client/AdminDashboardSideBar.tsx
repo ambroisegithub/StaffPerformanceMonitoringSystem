@@ -38,17 +38,25 @@ const sidebarItems = [
     id: 'dashboard',
     title: 'Dashboard',
     icon: <LayoutDashboard className="h-5 w-5" />,
-    path: '/admin/dashboard'
+    path: '/admin/'
   },
   {
     id: 'group',
-    title: 'Holding Company',
+    title: 'Company',
     icon: <Grid className="h-5 w-5" />,
     subItems: [
-      { id: 'group-new', title: 'Create Group', path: '/admin/create-group' },
+      { id: 'group-new', title: 'Complete Group', path: '/admin/create-group' },
       { id: 'companies-all', title: 'View Companies', path: '/admin/companies' },
       { id: 'departments-all', title: 'View Departments', path: '/admin/departments' }
 
+    ]
+  },
+    {
+    id: 'Level',
+    title: 'Supervisory Level',
+    icon: <TrendingUp className="h-5 w-5" />,
+    subItems: [
+      { id: 'Manage Level', title: 'Manage Level', path: '/admin/management-page' },
     ]
   },
   {
@@ -58,15 +66,6 @@ const sidebarItems = [
     subItems: [
       { id: 'create-position', title: 'Create Position', path: '/admin/create-position' },
       { id: 'manage-position', title: 'Manage Position', path: '/admin/manage-position' },
-    ]
-  },
-
-  {
-    id: 'Level',
-    title: 'Level Management',
-    icon: <TrendingUp className="h-5 w-5" />,
-    subItems: [
-      { id: 'Manage Level', title: 'Manage Level', path: '/admin/management-page' },
     ]
   },
   {
@@ -95,38 +94,58 @@ const sidebarItems = [
     title: 'Task Management',
     icon: <CheckSquare className="h-5 w-5" />,
     subItems: [
-      { id: 'Manage Teams Tasks', title: 'Manage Tasks', path: '/admin/teams-tasks-admin' },
+      { id: 'Manage Teams Tasks', title: 'Review Tasks', path: '/admin/teams-tasks-admin' },
       { id: 'Create Task', title: 'Create Task', path: '/admin/tasks/create' },
     ]
   },
-
-
-
-
+      {
+      id: 'Report',
+      title: 'Reports',
+      icon: <BarChart2 className="h-5 w-5" />,
+      subItems: [
+        { id: 'UserReport', title: 'User Report', path: '/admin/user/report', icon: <FileText className="h-4 w-4" /> },
+      ]
+    },
+    {
+      id: 'Profile',
+      title: 'My Profile',
+      icon: <Users className="h-5 w-5" />,
+      subItems: [
+        { id: 'My-profile', title: 'My Profile', path: '/admin/profile' },
+      ]
+    },
 ];
 
 const AdminDashSidebar = ({ isOpen, closeSidebar }) => {
-  const [expanded, setExpanded] = useState([]);
+  // Now expanded only tracks a single active item instead of an array
+  const [expandedItemId, setExpandedItemId] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleExpand = (itemId) => {
-    setExpanded(prev =>
-      prev.includes(itemId)
-        ? prev.filter(id => id !== itemId)
-        : [...prev, itemId]
-    );
+    // If the item is already expanded, close it
+    // Otherwise, expand this item (which automatically closes any other)
+    setExpandedItemId(expandedItemId === itemId ? null : itemId);
   };
 
-  const renderSidebarItem = (item:any) => {
-    const isExpanded = expanded.includes(item.id);
+  const renderSidebarItem = (item) => {
+    const isExpanded = expandedItemId === item.id;
     const hasSubItems = item.subItems && item.subItems.length > 0;
+    
+    const handleItemClick = () => {
+      if (hasSubItems) {
+        toggleExpand(item.id);
+      } else if (item.path) {
+        // Navigate to the path if there are no subitems but there is a path
+        window.location.href = item.path;
+      }
+    };
 
     return (
       <div key={item.id} className="space-y-1">
         <button
-          onClick={() => hasSubItems ? toggleExpand(item.id) : null}
+          onClick={handleItemClick}
           className={`w-full flex items-center justify-between p-2 rounded-lg
-            ${hasSubItems ? 'cursor-pointer' : ''}
+            cursor-pointer
             hover:bg-gray-100 dark:hover:bg-gray-700
             ${isExpanded ? 'bg-gray-100 dark:bg-gray-700' : ''}
             text-gray-700 dark:text-gray-100`}

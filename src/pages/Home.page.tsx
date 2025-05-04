@@ -1,13 +1,10 @@
-
-import BenefitsSection from '../components/HelloSection/BenefitsSection';
-import HelloSection from '../components/HelloSection/HelloSection';
-import * as React from 'react';
-import HowItWorksSection from '../components/HelloSection/HowItWorksSection';
-import FeaturesSection from '../components/HelloSection/FeaturesSection';
-import CTASection from '../components/HelloSection/CTASection';
+import HelloSection from "../components/HelloSection/HelloSection"
+import HowItWorksSection from "../components/HelloSection/HowItWorksSection"
+import FeaturesSection from "../components/HelloSection/FeaturesSection"
+import CTASection from "../components/HelloSection/CTASection"
+import React from "react"
 
 function Home() {
-
   return (
     <main>
       <HelloSection />
@@ -15,7 +12,7 @@ function Home() {
       <HowItWorksSection />
       <CTASection />
     </main>
-  );
+  )
 }
-export default Home;
 
+export default Home

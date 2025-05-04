@@ -323,7 +323,7 @@ const SignUp: React.FC = () => {
                                     ? "bg-green"
                                     : passwordStrength >= 60
                                     ? "bg-yellow"
-                                    : "bg-red"
+                                    : "bg-red-500"
                                 }`}
                                 style={{ width: `${passwordStrength}%` }}
                               />

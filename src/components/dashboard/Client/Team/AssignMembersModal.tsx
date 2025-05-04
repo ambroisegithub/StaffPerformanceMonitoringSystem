@@ -211,7 +211,7 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
       <div className="w-[40%] bg-white rounded-xl shadow-2xl overflow-hidden px-10 py-10">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-lg font-semibold">
             {activeTab === "assign" ? "Assign Members to " : "Remove Members from "} 
             {team.name}
           </DialogTitle>
@@ -427,7 +427,7 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
             <Button
               onClick={handleRemoveUsers}
               disabled={selectedUserIds.length === 0 || isRemovingMembers}
-              className="bg-red text-white hover:bg-red-600"
+              className="bg-red text-white hover:bg-red"
             >
               {isRemovingMembers ? (
                 <>

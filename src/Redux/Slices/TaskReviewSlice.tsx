@@ -18,6 +18,7 @@ export interface TeamMember {
   supervisorLevel: string
   hasSubordinates: boolean
   subordinateCount: number
+  teams?: string[] // <-- Add this line to support teams for overall filter
 }
 
 export interface Supervisor {
@@ -30,9 +31,6 @@ export interface Supervisor {
   level: string
 }
 
-
-
-
 export interface Team {
   id: number
   name: string
@@ -43,14 +41,12 @@ export interface Team {
   updated_at: string
   supervisor: Supervisor
   members?: TeamMember[]
-
 }
 
 export interface SupervisorTeamData {
   supervisor: Supervisor
   teams: Team[]
   members: TeamMember[]
-
 }
 
 export interface TaskComment {
@@ -59,7 +55,16 @@ export interface TaskComment {
   user_name: string
   timestamp: Date
 }
-
+export interface AllDailyTasksResponse {
+  success: boolean
+  data: TeamTasksData[]
+  organization: {
+    id: number
+    name: string
+    description: string
+  }
+  pagination: Pagination
+}
 export interface Task {
   id: number
   title: string
@@ -84,6 +89,7 @@ export interface DailySubmission {
   tasks: Task[]
   submitted_at: string
 }
+
 // New hierarchical data types
 export interface HierarchicalTeamData {
   teams: Team[]
@@ -95,9 +101,29 @@ export interface HierarchicalMember {
   user: TeamMember
   submissions: Record<string, DailySubmission>
 }
+
 export interface TeamTasksData {
   user: TeamMember
   submissions: Record<string, DailySubmission>
+}
+
+// New admin team tasks data structure
+export interface AdminTeamTasksData {
+  team: string
+  supervisor: {
+    id: number
+    name: string
+    role: string
+  }
+  members: {
+    id: number
+    name: string
+    dailyTasks: {
+      id: number
+      submission_date: string
+      tasks: Task[]
+    }[]
+  }[]
 }
 
 export interface Pagination {
@@ -105,7 +131,6 @@ export interface Pagination {
   total_pages: number
   total_items: number
 }
-
 export interface TaskReviewFilters {
   status?: string
   startDate?: string
@@ -115,9 +140,11 @@ export interface TaskReviewFilters {
   company?: string
   department?: string
   project?: string
-  team?: string // Added
-  supervisor?: string // Added
-  search?: string // Added
+  team?: string
+  supervisor?: string
+  search?: string
+  dateRange?: string
+  submissionStatus?: string
 }
 
 export interface ReviewTaskPayload {
@@ -125,6 +152,105 @@ export interface ReviewTaskPayload {
   status: "approved" | "rejected"
   comment?: string
   reviewedBy: number
+}
+export interface TaskStatusCounts {
+  pending: number
+  in_progress: number
+  completed: number
+  delayed: number
+}
+
+export interface ReviewStatusCounts {
+  pending: number
+  approved: number
+  rejected: number
+}
+
+
+export interface ReportSummary {
+  totalDays: number
+  daysWithTasks: number
+  daysSubmitted: number
+  daysNotSubmitted: number
+  submissionRate: number
+  totalTasks: number
+  taskStatusCounts: TaskStatusCounts
+  reviewStatusCounts: ReviewStatusCounts
+  reviewRate: number
+  completionRate: number
+  approvalRate: number
+}
+
+export interface DailyReport {
+  date: string
+  dayOfWeek: string
+  hasEntry: boolean
+  submitted: boolean
+  taskCount: number
+  taskStatusCounts: TaskStatusCounts
+  reviewStatusCounts: ReviewStatusCounts
+  reviewedCount: number
+  notReviewedCount: number
+  submittedAt: string | null
+  tasks: Task[]
+}
+
+export interface MonthlyTrend {
+  month: string
+  totalTasks: number
+  submittedDays: number
+  statusCounts: TaskStatusCounts
+  reviewCounts: ReviewStatusCounts
+  completionRate: number
+  approvalRate: number
+}
+
+// User Task Report Types
+export interface UserTaskReportUser {
+  id: number
+  username: string
+  firstName: string
+  lastName: string
+  email: string
+  department: string
+  company: string
+  position: string
+  level: string
+  teams: Array<{
+    id: number
+    name: string
+    supervisor: string
+  }>
+}
+
+export interface ReportPeriod {
+  dateRange: string
+  startDate: string
+  endDate: string
+  totalDays: number
+  submissionStatus: string
+}
+
+export interface UserTaskReport {
+  user: UserTaskReportUser
+  reportPeriod: ReportPeriod
+  summary: ReportSummary
+  dailyReports: DailyReport[]
+  calendarData: Array<{
+    date: string
+    hasEntry: boolean
+    submitted: boolean
+    taskCount: number
+    completedTasks: number
+    pendingReviews: number
+    status: string
+  }>
+  monthlyTrends: MonthlyTrend[]
+}
+
+export interface UserTaskReportResponse {
+  success: boolean
+  data: UserTaskReport
 }
 
 interface TaskReviewState {
@@ -136,7 +262,7 @@ interface TaskReviewState {
   hierarchicalLoading: boolean
   teamMembersLoading: boolean
   reviewLoading: boolean
-  adminTeamTasks: any[]
+  adminTeamTasks: AdminTeamTasksData[]
   adminTeamTasksLoading: boolean
   adminTeamTasksError: string | null
   error: string | null
@@ -144,7 +270,14 @@ interface TaskReviewState {
   teamMembersError: string | null
   pagination: Pagination
   filters: TaskReviewFilters
+  allDailyTasks: TeamTasksData[]; // Add this line
+  allDailyTasksLoading: boolean;
+  allDailyTasksError: string | null;
+    userTaskReport: UserTaskReport | null
+  userTaskReportLoading: boolean
+  userTaskReportError: string | null
 }
+
 
 const initialState: TaskReviewState = {
   teamTasks: [],
@@ -155,9 +288,9 @@ const initialState: TaskReviewState = {
   hierarchicalLoading: false,
   teamMembersLoading: false,
   reviewLoading: false,
-  adminTeamTasks: [], // Add this
-  adminTeamTasksLoading: false, // Add this
-  adminTeamTasksError: null, // Add this
+  adminTeamTasks: [],
+  adminTeamTasksLoading: false,
+  adminTeamTasksError: null,
   error: null,
   hierarchicalError: null,
   teamMembersError: null,
@@ -170,10 +303,15 @@ const initialState: TaskReviewState = {
     startDate: undefined,
     endDate: undefined,
     status: undefined,
-    userName: undefined
+    userName: undefined,
   },
+  allDailyTasksLoading: false,
+  allDailyTasksError: null,
+  allDailyTasks: [] as TeamTasksData[],
+   userTaskReport: null,
+  userTaskReportLoading: false,
+  userTaskReportError: null,
 }
-
 
 // Async thunks
 export const fetchTeamTasks = createAsyncThunk(
@@ -190,7 +328,7 @@ export const fetchTeamTasks = createAsyncThunk(
       limit?: number
       filters?: TaskReviewFilters
     },
-    { rejectWithValue , getState},
+    { rejectWithValue, getState },
   ) => {
     try {
       const queryParams = new URLSearchParams()
@@ -217,36 +355,35 @@ export const fetchTeamTasks = createAsyncThunk(
         if (filters?.userName) {
           queryParams.append("userName", filters.userName)
         }
-  
+
         if (filters?.userLevel) {
           queryParams.append("userLevel", filters.userLevel)
         }
-  
+
         if (filters?.company) {
           queryParams.append("company", filters.company)
         }
-  
+
         if (filters?.department) {
           queryParams.append("department", filters.department)
         }
-  
+
         if (filters?.project) {
           queryParams.append("project", filters.project)
         }
-  
       }
 
-      const state = store.getState() as RootState;
-      const organizationId = state.login.user?.organization?.id;
-     if (!organizationId) {
-       return
-     }
+      const state = store.getState() as RootState
+      const organizationId = state.login.user?.organization?.id
+      if (!organizationId) {
+        return
+      }
       const token = localStorage.getItem("token")
       const response = await axios.get(
         `${import.meta.env.VITE_BASE_URL}/task/${organizationId}/supervisor/${supervisorId}/team-tasks?${queryParams.toString()}`,
         {
           headers: {
-            Authorization: `Bearer ${token}`, 
+            Authorization: `Bearer ${token}`,
           },
         },
       )
@@ -261,18 +398,18 @@ export const fetchTeamTasks = createAsyncThunk(
 export const fetchSupervisorTeamMembers = createAsyncThunk(
   "taskReview/fetchSupervisorTeamMembers",
   async (supervisorId: number, { rejectWithValue, getState }) => {
-    try {   
-       const state = store.getState() as RootState;
-       const organizationId = state.login.user?.organization?.id;
+    try {
+      const state = store.getState() as RootState
+      const organizationId = state.login.user?.organization?.id
       if (!organizationId) {
         return
       }
-      const token =localStorage.getItem("token")  
+      const token = localStorage.getItem("token")
       const response = await axios.get(
         `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/supervisor/${supervisorId}/team-members`,
         {
           headers: {
-            Authorization: `Bearer ${token}`, 
+            Authorization: `Bearer ${token}`,
           },
         },
       )
@@ -280,7 +417,7 @@ export const fetchSupervisorTeamMembers = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || "Failed to fetch supervisor team members")
     }
-  }
+  },
 )
 
 export const reviewTask = createAsyncThunk(
@@ -293,11 +430,11 @@ export const reviewTask = createAsyncThunk(
         {
           status: reviewData.status,
           comment: reviewData.comment,
-          reviewedBy: reviewData.reviewedBy, // Dynamically passed
+          // Remove reviewedBy - it will be set automatically from authenticated user
         },
         {
           headers: {
-            Authorization: `Bearer ${token}`, 
+            Authorization: `Bearer ${token}`,
           },
         },
       )
@@ -308,6 +445,7 @@ export const reviewTask = createAsyncThunk(
     }
   },
 )
+
 export const fetchHierarchicalTeamTasks = createAsyncThunk(
   "taskReview/fetchHierarchicalTeamTasks",
   async (
@@ -349,14 +487,14 @@ export const fetchHierarchicalTeamTasks = createAsyncThunk(
       }
       const token = localStorage.getItem("token")
 
-      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/task/tasks/${supervisorId}?${queryParams.toString()}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`, 
+      const response = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/task/tasks/${supervisorId}?${queryParams.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      },
-    )
-      
+      )
 
       return response.data
     } catch (error: any) {
@@ -364,6 +502,56 @@ export const fetchHierarchicalTeamTasks = createAsyncThunk(
     }
   },
 )
+
+export const fetchUserTasksReport = createAsyncThunk(
+  "taskReview/fetchUserTasksReport",
+  async (
+    {
+      userId,
+      filters,
+    }: {
+      userId: number
+      filters?: TaskReviewFilters
+    },
+    { rejectWithValue },
+  ) => {
+    try {
+      const queryParams = new URLSearchParams()
+
+      // Apply filters if they exist
+      if (filters) {
+        if (filters.dateRange) {
+          queryParams.append("dateRange", filters.dateRange)
+        }
+        if (filters.startDate) {
+          queryParams.append("startDate", filters.startDate)
+        }
+        if (filters.endDate) {
+          queryParams.append("endDate", filters.endDate)
+        }
+        if (filters.submissionStatus) {
+          queryParams.append("submissionStatus", filters.submissionStatus)
+        }
+      }
+
+      const token = localStorage.getItem("token")
+      const response = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/task/user/${userId}/tasks-report?${queryParams.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+
+      return response.data
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch user tasks report")
+    }
+  },
+)
+
+
 export const fetchAdminTeamTasks = createAsyncThunk(
   "taskReview/fetchAdminTeamTasks",
   async (
@@ -421,19 +609,19 @@ export const fetchAdminTeamTasks = createAsyncThunk(
       }
 
       const token = localStorage.getItem("token")
-        
-      const state = store.getState() as RootState;
-         const organizationId = state.login.user?.organization?.id;
-       
-         if (!organizationId) {
-           return;
-         }
-       
+
+      const state = store.getState() as RootState
+      const organizationId = state.login.user?.organization?.id
+
+      if (!organizationId) {
+        return
+      }
+
       const response = await axios.get(
-        `${import.meta.env.VITE_BASE_URL}/task/${organizationId}/admin/team-tasks?userId=${userId}&${queryParams.toString()}`,
+        `${import.meta.env.VITE_BASE_URL}/v1/organizations/organization/${organizationId}/teams/daily-tasks`,
         {
           headers: {
-            Authorization: `Bearer ${token}`, 
+            Authorization: `Bearer ${token}`,
           },
         },
       )
@@ -445,6 +633,65 @@ export const fetchAdminTeamTasks = createAsyncThunk(
   },
 )
 
+export const fetchAllDailyTasks = createAsyncThunk(
+  "taskReview/fetchAllDailyTasks",
+  async (
+    {
+      organizationId,
+      page = 1,
+      limit = 10,
+      filters,
+    }: {
+      organizationId: number
+      page?: number
+      limit?: number
+      filters?: TaskReviewFilters
+    },
+    { rejectWithValue },
+  ) => {
+    try {
+      const queryParams = new URLSearchParams()
+      queryParams.append("page", page.toString())
+      queryParams.append("limit", limit.toString())
+
+      // Apply filters if they exist
+      if (filters) {
+        if (filters.status) {
+          queryParams.append("status", filters.status)
+        }
+        if (filters.startDate) {
+          queryParams.append("startDate", filters.startDate)
+        }
+        if (filters.endDate) {
+          queryParams.append("endDate", filters.endDate)
+        }
+        if (filters.userName) {
+          queryParams.append("userName", filters.userName)
+        }
+        if (filters.department) {
+          queryParams.append("department", filters.department)
+        }
+        if (filters.company) {
+          queryParams.append("company", filters.company)
+        }
+      }
+
+      const token = localStorage.getItem("token")
+      const response = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/task/${organizationId}/admin/all-daily-tasks?${queryParams.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+
+      return response.data
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch all daily tasks")
+    }
+  },
+)
 const taskReviewSlice = createSlice({
   name: "taskReview",
   initialState,
@@ -452,6 +699,7 @@ const taskReviewSlice = createSlice({
     setSelectedTask: (state, action: PayloadAction<Task>) => {
       state.selectedTask = action.payload
     },
+    
     clearSelectedTask: (state) => {
       state.selectedTask = null
     },
@@ -463,8 +711,12 @@ const taskReviewSlice = createSlice({
         startDate: undefined,
         endDate: undefined,
         status: undefined,
-        userName: undefined, 
+        userName: undefined,
       }
+    },
+     clearUserTaskReport: (state) => {
+      state.userTaskReport = null
+      state.userTaskReportError = null
     },
   },
   extraReducers: (builder) => {
@@ -572,17 +824,76 @@ const taskReviewSlice = createSlice({
             submissions: updatedSubmissions,
           }
         })
+
+        // Update the task in adminTeamTasks if it exists
+        if (state.adminTeamTasks.length > 0) {
+          state.adminTeamTasks = state.adminTeamTasks.map((team) => {
+            const updatedMembers = team.members.map((member) => {
+              const updatedDailyTasks = member.dailyTasks.map((dailyTask) => {
+                const updatedTasks = dailyTask.tasks.map((task) =>
+                  task.id === reviewedTaskId
+                    ? {
+                        ...task,
+                        review_status: action.payload.data.task.review_status,
+                        reviewed: true,
+                        reviewed_by: action.payload.data.reviewedBy.id,
+                        reviewed_at: action.payload.data.task.reviewed_at,
+                        comment: action.payload.data.task.comment,
+                      }
+                    : task,
+                )
+                return {
+                  ...dailyTask,
+                  tasks: updatedTasks,
+                }
+              })
+              return {
+                ...member,
+                dailyTasks: updatedDailyTasks,
+              }
+            })
+            return {
+              ...team,
+              members: updatedMembers,
+            }
+          })
+        }
       })
       .addCase(reviewTask.rejected, (state, action) => {
         state.reviewLoading = false
         state.error = action.payload as string
+            })
+      .addCase(fetchAllDailyTasks.pending, (state) => {
+        state.loading = true
+        state.error = null
       })
-      
+      .addCase(fetchAllDailyTasks.fulfilled, (state, action) => {
+        state.loading = false
+        state.allDailyTasks = action.payload.data
+        state.pagination = action.payload.pagination
+      })
+      .addCase(fetchAllDailyTasks.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
+      .addCase(fetchUserTasksReport.pending, (state) => {
+        state.userTaskReportLoading = true
+        state.userTaskReportError = null
+      })
+      .addCase(fetchUserTasksReport.fulfilled, (state, action) => {
+        state.userTaskReportLoading = false
+        state.userTaskReport = action.payload.data
+      })
+      .addCase(fetchUserTasksReport.rejected, (state, action) => {
+        state.userTaskReportLoading = false
+        state.userTaskReportError = action.payload as string
+      })
   },
 })
 
-export const { setSelectedTask, clearSelectedTask, setFilters, resetFilters } = taskReviewSlice.actions
 
+export const { setSelectedTask, clearSelectedTask, setFilters, resetFilters ,clearUserTaskReport} = taskReviewSlice.actions
+  taskReviewSlice.actions
 export const selectTeamTasks = (state: RootState) => state.taskReview.teamTasks
 export const selectSelectedTask = (state: RootState) => state.taskReview.selectedTask
 export const selectLoading = (state: RootState) => state.taskReview.loading
@@ -599,4 +910,10 @@ export const selectHierarchicalError = (state: RootState) => state.taskReview.hi
 export const selectAdminTeamTasks = (state: RootState) => state.taskReview.adminTeamTasks
 export const selectAdminTeamTasksLoading = (state: RootState) => state.taskReview.adminTeamTasksLoading
 export const selectAdminTeamTasksError = (state: RootState) => state.taskReview.adminTeamTasksError
+export const selectAllDailyTasksLoading = (state: RootState) => state.taskReview.allDailyTasksLoading
+export const selectAllDailyTasks = (state: RootState) => state.taskReview.allDailyTasks
+
+export const selectUserTaskReport = (state: RootState) => state.taskReview.userTaskReport
+export const selectUserTaskReportLoading = (state: RootState) => state.taskReview.userTaskReportLoading
+export const selectUserTaskReportError = (state: RootState) => state.taskReview.userTaskReportError
 export default taskReviewSlice.reducer

@@ -55,7 +55,16 @@ const sidebarItems = [
       { id: 'review-task', title: 'Review Task', path: '/supervisor/review' },
       {id:'create-task', title: 'Create Task', path: '/supervisor/tasks/create'},
     ]
-  }
+  },
+  {
+    id: 'Profile',
+    title: 'My Profile',
+    icon: <Users className="h-5 w-5" />,
+    subItems: [
+      { id: 'My-profile', title: 'My Profile', path: '/super-visor/profile' },
+    ]
+  },
+  
 ];
 
 const SuperVisorDashSidebar = ({ isOpen, closeSidebar }) => {

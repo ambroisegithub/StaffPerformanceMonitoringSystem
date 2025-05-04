@@ -2,397 +2,595 @@
 
 import React from "react"
 import { useState } from "react"
-import { useAppDispatch, useAppSelector } from "../../Redux/hooks"
 import {
-  type Helper,
-  createConversation,
-  fetchConversation,
-  fetchConversationMessages,
-  fetchConversations,
-  selectConversations,
-  selectChatHelpers,
-  selectChatLoading,
-  selectActiveUsers,
-} from "./ChatSlice"
-import { Search, Plus, X, Users, Clock, MessageSquare } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { Input } from "../ui/input"
-import { Button } from "../ui/button"
-import { Avatar, AvatarFallback } from "../ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog"
+  Search,
+  MessageSquare,
+  Loader,
+  Archive,
+  Filter,
+  Briefcase,
+  ChevronDown,
+  ChevronRight,
+  Users,
+  MessageCircle,
+  UserPlus,
+  User,
+} from "lucide-react"
+import { addNewConversation, type Conversation, type User as UserType } from "./chatSlice"
+import { useAppDispatch, useAppSelector } from "../../Redux/hooks"
+import { createConversation } from "../../services/socketService"
 
 interface ChatSidebarProps {
-  organizationId: number
-  userId: number
-  isMobileOpen: boolean
-  onMobileClose: () => void
-  selectedConversationId: string | null
+  conversations: Conversation[]
+  archivedConversations: Conversation[]
+  users: UserType[]
+  selectedConversation: string | null
   onSelectConversation: (conversationId: string) => void
+  currentUserId: number
+  onArchiveConversation: (conversationId: string) => void
 }
 
+type TabType = "conversations" | "contacts" | "archived"
+
 const ChatSidebar: React.FC<ChatSidebarProps> = ({
-  organizationId,
-  userId,
-  isMobileOpen,
-  onMobileClose,
-  selectedConversationId,
+  conversations,
+  archivedConversations,
+  users,
+  selectedConversation,
   onSelectConversation,
+  currentUserId,
 }) => {
   const dispatch = useAppDispatch()
-  const conversations = useAppSelector(selectConversations)
-  const helpers = useAppSelector(selectChatHelpers)
-  const loading = useAppSelector(selectChatLoading)
-  const activeUsers = useAppSelector(selectActiveUsers)
   const [searchTerm, setSearchTerm] = useState("")
-  const [isNewChatOpen, setIsNewChatOpen] = useState(false)
-  const [selectedHelper, setSelectedHelper] = useState<Helper | null>(null)
-  const [initialMessage, setInitialMessage] = useState("")
-  const [showOnlineOnly, setShowOnlineOnly] = useState(false)
-  const [activeTab, setActiveTab] = useState<"conversations" | "contacts">(
-    conversations.length > 0 ? "conversations" : "contacts",
+  const [activeTab, setActiveTab] = useState<TabType>("contacts")
+  const [showFilters, setShowFilters] = useState(false)
+  const [filterType, setFilterType] = useState<"all" | "unread" | "tasks">("all")
+  const [showOrgUsers, setShowOrgUsers] = useState(false)
+  const { usersLoading, teamMembers, organizationUsers } = useAppSelector((state) => state.chat)
+  const onlineUsers = useAppSelector((state) => state.chat?.onlineUsers || [])
+
+  // Group conversations by user to avoid duplicates
+  const groupedConversations = conversations.reduce(
+    (acc, conversation) => {
+      const userId = conversation.otherUser.id
+
+      // If we already have a conversation with this user
+      if (acc[userId]) {
+        // If the current conversation is more recent, replace the existing one
+        if (new Date(conversation.lastMessage.created_at) > new Date(acc[userId].lastMessage.created_at)) {
+          acc[userId] = conversation
+        }
+
+        // If the current conversation has a task and the existing one doesn't, update the task info
+        if (conversation.task && !acc[userId].task) {
+          acc[userId].task = conversation.task
+        }
+
+        // Combine unread counts
+        acc[userId].unreadCount += conversation.unreadCount
+      } else {
+        acc[userId] = { ...conversation }
+      }
+
+      return acc
+    },
+    {} as Record<number, Conversation>,
   )
 
-  const handleSelectConversation = (conversationId: string) => {
-    dispatch(fetchConversation({ conversationId, userId }));
-    dispatch(fetchConversationMessages({ conversationId, userId }));
-    onSelectConversation(conversationId);
-  };
+  // Convert back to array
+  const consolidatedConversations = Object.values(groupedConversations)
 
-  const handleCreateConversation = async () => {
-    if (selectedHelper && initialMessage.trim()) {
-      try {
-        const result = await dispatch(
-          createConversation({
-            senderId: userId,
-            receiverId: selectedHelper.id,
-            initialMessage: initialMessage.trim(),
-          }),
-        ).unwrap()
+  // Filter team members - exclude current user for display
+  const filteredTeamMembers = teamMembers.filter(
+    (user) =>
+      user.id !== currentUserId &&
+      (user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())),
+  )
 
-        if (result.success) {
-          setIsNewChatOpen(false)
-          setSelectedHelper(null)
-          setInitialMessage("")
+  // Get current user from team members (for display purposes)
+  const currentUserInTeam = teamMembers.find((user) => user.id === currentUserId)
 
-          // Fetch updated conversations
-          dispatch(fetchConversations({ organizationId, userId }))
+  // Filter organization users
+  const filteredOrgUsers = organizationUsers.filter(
+    (user) =>
+      user.id !== currentUserId &&
+      (user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())),
+  )
 
-          // Select the new conversation
-          if (result.data.conversationId) {
-            dispatch(fetchConversation({ conversationId: result.data.conversationId, userId }))
-            dispatch(fetchConversationMessages({ conversationId: result.data.conversationId, userId }))
-            onSelectConversation(result.data.conversationId)
-          }
-        }
-      } catch (error) {
-        console.error("Failed to create conversation:", error)
+  // Filter all users (for backward compatibility)
+  const filteredUsers = users.filter(
+    (user) =>
+      user.id !== currentUserId &&
+      (user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())),
+  )
+
+  const filteredConversations = consolidatedConversations.filter((conv) => {
+    const matchesSearch =
+      searchTerm === "" ||
+      conv.otherUser.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      conv.lastMessage.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (conv.task?.title && conv.task.title.toLowerCase().includes(searchTerm.toLowerCase()))
+
+    if (!matchesSearch) return false
+
+    switch (filterType) {
+      case "unread":
+        return conv.unreadCount > 0
+      case "tasks":
+        return !!conv.task || !!conv.dailyTask
+      default:
+        return true
+    }
+  })
+
+  // Create a map of user IDs to their most recent conversation
+  const userConversationMap = conversations.reduce(
+    (map, conv) => {
+      const userId = conv.otherUser.id
+      if (!map[userId] || new Date(conv.lastMessage.created_at) > new Date(map[userId].lastMessage.created_at)) {
+        map[userId] = conv
       }
+      return map
+    },
+    {} as Record<number, Conversation>,
+  )
+
+  const handleStartChat = async (receiverId: number) => {
+    try {
+      // Find any existing conversation with this user
+      const existingConversations = conversations.filter((conv) => conv.otherUser.id === receiverId)
+      let conversationId = null
+
+      if (existingConversations.length > 0) {
+        // Use the most recent conversation with this user
+        const mostRecentConv = existingConversations.sort(
+          (a, b) => new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime(),
+        )[0]
+
+        conversationId = mostRecentConv.id
+        console.log("Using existing conversation:", conversationId)
+      } else {
+        // Create a new conversation
+        const receiver = [...teamMembers, ...organizationUsers].find((user) => user.id === receiverId)
+        const result = (await createConversation(receiverId, "Hello! Let's chat.")) as any
+
+        if (result && result.conversationId && receiver) {
+          conversationId = result.conversationId
+          console.log("Created new conversation:", conversationId)
+
+          dispatch(
+            addNewConversation({
+              conversationId: result.conversationId,
+              sender: { id: currentUserId, name: "You" },
+              receiver,
+            }),
+          )
+        } else {
+          console.error("Failed to create conversation: Missing conversationId or receiver")
+          return
+        }
+      }
+
+      if (conversationId) {
+        onSelectConversation(conversationId)
+        setActiveTab("conversations")
+      }
+    } catch (error) {
+      console.error("Error starting chat:", error)
     }
   }
 
-  const handleStartConversation = (helper: Helper) => {
-    setSelectedHelper(helper)
-    setIsNewChatOpen(true)
+  const formatLastActive = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays === 1) return "Yesterday"
+    return date.toLocaleDateString()
   }
 
-  // Filter conversations based on search term
-  const filteredConversations = conversations.filter((conversation) => {
-    const matchesSearch =
-      conversation.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      conversation.otherUser?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const renderUserItem = (user: UserType, showLastMessage = false) => {
+    const conversation = userConversationMap[user.id]
+    const hasConversation = !!conversation
 
-    if (showOnlineOnly) {
-      return matchesSearch && activeUsers.includes(conversation.otherUser.id)
-    }
+    return (
+      <div
+        key={user.id}
+        className="px-4 py-3 flex items-center hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+        onClick={() => handleStartChat(user.id)}
+      >
+        <div className="relative">
+          <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-700 dark:text-gray-300 overflow-hidden">
+            {user.profilePictureUrl ? (
+              <img
+                src={user.profilePictureUrl || "/placeholder.svg"}
+                alt={user.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              user.name.charAt(0).toUpperCase()
+            )}
+          </div>
+          {onlineUsers.includes(user.id) && (
+            <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green border-2 border-white dark:border-gray-800"></div>
+          )}
+        </div>
+        <div className="ml-3 flex-1">
+          <div className="flex justify-between">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.name}</p>
+            {hasConversation && showLastMessage && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-1">
+                {formatLastActive(conversation.lastMessage.created_at)}
+              </span>
+            )}
+          </div>
 
-    return matchesSearch
-  })
+          {showLastMessage && hasConversation ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              {conversation.lastMessage.sender === currentUserId && "You: "}
+              {conversation.lastMessage.content}
+            </p>
+          ) : (
+            <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+              <span className="truncate">{user.email}</span>
+              {user.role && (
+                <>
+                  <span className="mx-1">•</span>
+                  <span className="capitalize">{user.role}</span>
+                </>
+              )}
+            </div>
+          )}
 
-  // Filter helpers based on search term
-  const filteredHelpers = helpers.filter((helper) => {
-    const matchesSearch =
-      helper.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      helper.role.toLowerCase().includes(searchTerm.toLowerCase())
-
-    if (showOnlineOnly) {
-      return matchesSearch && activeUsers.includes(helper.id)
-    }
-
-    return matchesSearch
-  })
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2)
+          {hasConversation && conversation.unreadCount > 0 && showLastMessage && (
+            <span className="ml-auto text-xs font-semibold text-white bg-red rounded-full px-2 py-0.5 mt-1 inline-block">
+              {conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}
+            </span>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
-    <>
-      {/* Mobile overlay */}
-      <div
-        className={`fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden ${isMobileOpen ? "block" : "hidden"}`}
-        onClick={onMobileClose}
-      />
+    <div className="w-full md:w-80 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      {/* Search and Tabs */}
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+        <div className="relative mb-3">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search..."
+            className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
 
-      {/* Sidebar */}
-      <div
-        className={`
-          w-full md:w-80 lg:w-96 bg-white border-r border-gray-200 flex-shrink-0
-          md:relative md:block
-          fixed inset-y-0 left-0 z-40 md:z-auto
-          transition-transform duration-300 ease-in-out
-          ${isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
-        `}
-      >
-        <div className="h-full flex flex-col overflow-hidden">
-          {/* Sidebar Header */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">Conversations</h2>
-              <button className="md:hidden p-1 rounded-md hover:bg-gray-100" onClick={onMobileClose}>
-                <X className="h-5 w-5 text-gray-500" />
+        {/* Tabs */}
+        <div className="flex border rounded-md overflow-hidden">
+        <button
+            className={`flex-1 py-1.5 text-xs font-medium flex items-center justify-center ${
+              activeTab === "contacts"
+                ? "bg-blue text-white"
+                : "bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+            }`}
+            onClick={() => setActiveTab("contacts")}
+          >
+            <UserPlus size={14} className="mr-1" />
+            Contacts
+          </button>
+          <button
+            className={`flex-1 py-1.5 text-xs font-medium flex items-center justify-center ${
+              activeTab === "conversations"
+                ? "bg-blue text-white"
+                : "bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+            }`}
+            onClick={() => setActiveTab("conversations")}
+          >
+            <MessageCircle size={14} className="mr-1" />
+            Chats
+          </button>
+
+          <button
+            className={`flex-1 py-1.5 text-xs font-medium flex items-center justify-center ${
+              activeTab === "archived"
+                ? "bg-blue text-white"
+                : "bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+            }`}
+            onClick={() => setActiveTab("archived")}
+          >
+            <Archive size={14} className="mr-1" />
+            Archived
+          </button>
+        </div>
+
+        {/* Filters - Only show for conversations tab */}
+        {activeTab === "conversations" && (
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              className="text-xs flex items-center text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter size={14} className="mr-1" />
+              {filterType !== "all" ? `Filtered: ${filterType}` : "Filter"}
+            </button>
+          </div>
+        )}
+
+        {activeTab === "conversations" && showFilters && (
+          <div className="mt-2 p-2 bg-white dark:bg-gray-700 rounded-md shadow-md border border-gray-200 dark:border-gray-600">
+            <div className="flex flex-col space-y-1">
+              <button
+                className={`text-xs text-left px-2 py-1 rounded ${filterType === "all" ? "bg-blue dark:bg-green text-white dark:text-white" : "hover:bg-gray-100 dark:hover:bg-gray-600"}`}
+                onClick={() => setFilterType("all")}
+              >
+                All Conversations
+              </button>
+              <button
+                className={`text-xs text-left px-2 py-1 rounded ${filterType === "unread" ? "bg-blue dark:bg-green text-white dark:text-white" : "hover:bg-gray-100 dark:hover:bg-gray-600"}`}
+                onClick={() => setFilterType("unread")}
+              >
+                Unread
+              </button>
+              <button
+                className={`text-xs text-left px-2 py-1 rounded ${filterType === "tasks" ? "bg-blue dark:bg-green text-white dark:text-text-white" : "hover:bg-gray-100 dark:hover:bg-gray-600"}`}
+                onClick={() => setFilterType("tasks")}
+              >
+                Tasks
               </button>
             </div>
-
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              <Input
-                placeholder="Search..."
-                className="pl-9 py-2 h-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="online-only"
-                  checked={showOnlineOnly}
-                  onChange={() => setShowOnlineOnly(!showOnlineOnly)}
-                  className="mr-2"
-                />
-                <label htmlFor="online-only" className="text-sm text-gray-600">
-                  Online only
-                </label>
-              </div>
-
-              <Dialog open={isNewChatOpen} onOpenChange={setIsNewChatOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="flex items-center gap-1">
-                    <Plus className="h-4 w-4" />
-                    <span>New Chat</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Start a new conversation</DialogTitle>
-                  </DialogHeader>
-                  <div className="mt-4">
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Select a team member</label>
-                      <div className="max-h-60 overflow-y-auto border rounded-md divide-y">
-                        {filteredHelpers.map((helper) => (
-                          <div
-                            key={helper.id}
-                            className={`p-3 flex items-center hover:bg-gray-50 cursor-pointer ${
-                              selectedHelper?.id === helper.id ? "bg-gray-100" : ""
-                            }`}
-                            onClick={() => setSelectedHelper(helper)}
-                          >
-                            <Avatar className="h-8 w-8 mr-3">
-                              <AvatarFallback>{getInitials(helper.name)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-medium">{helper.name}</div>
-                              <div className="text-xs text-gray-500">
-                                {helper.role} • {helper.level}
-                              </div>
-                            </div>
-                            {activeUsers.includes(helper.id) && (
-                              <div className="ml-auto w-2 h-2 bg-green rounded-full"></div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Initial message</label>
-                      <textarea
-                        className="w-full border rounded-md p-2 h-24 resize-none"
-                        placeholder="Type your message here..."
-                        value={initialMessage}
-                        onChange={(e) => setInitialMessage(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" onClick={() => setIsNewChatOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleCreateConversation} disabled={!selectedHelper || !initialMessage.trim()}>
-                        Start Conversation
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
           </div>
+        )}
+      </div>
 
-          {/* Tabs for Conversations and Contacts */}
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as "conversations" | "contacts")}
-            className="w-full flex-1 flex flex-col overflow-hidden"
-          >
-            <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger value="conversations" className="text-sm">
-                Conversations
-              </TabsTrigger>
-              <TabsTrigger value="contacts" className="text-sm">
-                Contacts
-              </TabsTrigger>
-            </TabsList>
+      {/* Loading Indicator */}
+      {usersLoading && (
+        <div className="flex items-center justify-center py-4">
+          <Loader className="h-6 w-6 animate-spin text-gray-500 dark:text-gray-400" />
+          <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">Loading users...</span>
+        </div>
+      )}
 
-            {/* Conversations Tab */}
-            <TabsContent value="conversations" className="flex-1 overflow-y-auto">
-              {loading ? (
-                <div className="p-4 space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center p-2 animate-pulse">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full mr-3"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+      {/* Content based on active tab */}
+      {!usersLoading && (
+        <div className="flex-1 overflow-y-auto">
+          {/* Archived Tab */}
+          {activeTab === "archived" && (
+            <>
+              {archivedConversations.length > 0 ? (
+                <div className="py-2">
+                  <div className="px-4 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    Archived
+                  </div>
+                  {archivedConversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      className={`px-4 py-3 flex items-center hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
+                        selectedConversation === conversation.id ? "bg-gray-100 dark:bg-gray-700" : ""
+                      }`}
+                      onClick={() => onSelectConversation(conversation.id)}
+                    >
+                      <div className="relative">
+                        <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-700 dark:text-gray-300 overflow-hidden">
+                          {conversation.otherUser.profilePictureUrl ? (
+                            <img
+                              src={conversation.otherUser.profilePictureUrl || "/placeholder.svg"}
+                              alt={conversation.otherUser.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            conversation.otherUser.name.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                      </div>
+                      <div className="ml-3 flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {conversation.otherUser.name}
+                          </p>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-1">
+                            {formatLastActive(conversation.lastMessage.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {conversation.lastMessage.content}
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : filteredConversations.length > 0 ? (
-                <div className="divide-y divide-gray-200">
+              ) : (
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <Archive className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No archived conversations</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Conversations Tab */}
+          {activeTab === "conversations" && (
+            <>
+              {filteredConversations.length > 0 ? (
+                <div className="py-2">
+                  <div className="px-4 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    Conversations
+                  </div>
                   {filteredConversations.map((conversation) => (
                     <div
                       key={conversation.id}
-                      className={`p-3 flex items-start hover:bg-gray-50 cursor-pointer transition-colors ${
-                        selectedConversationId === conversation.id ? "bg-gray-100" : ""
+                      className={`px-4 py-3 flex items-center hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
+                        selectedConversation === conversation.id ? "bg-gray-100 dark:bg-gray-700" : ""
                       }`}
-                      onClick={() => handleSelectConversation(conversation.id)}
+                      onClick={() => onSelectConversation(conversation.id)}
                     >
-                      <div className="relative mr-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarFallback>{getInitials(conversation.otherUser.name)}</AvatarFallback>
-                        </Avatar>
-                        {activeUsers.includes(conversation.otherUser.id) && (
-                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green border-2 border-white rounded-full"></span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
-                          <h3 className="font-medium text-gray-900 truncate">{conversation.otherUser.name}</h3>
-                          {conversation.lastMessage && (
-                            <span className="text-xs text-gray-500">
-                              {formatDistanceToNow(new Date(conversation.lastMessage.created_at), { addSuffix: true })}
-                            </span>
+                      <div className="relative">
+                        <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-700 dark:text-gray-300 overflow-hidden">
+                          {conversation.otherUser.profilePictureUrl ? (
+                            <img
+                              src={conversation.otherUser.profilePictureUrl || "/placeholder.svg"}
+                              alt={conversation.otherUser.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            conversation.otherUser.name.charAt(0).toUpperCase()
                           )}
                         </div>
-                        {conversation.lastMessage && (
-                          <p className="text-sm text-gray-500 truncate">{conversation.lastMessage.content}</p>
+                        {onlineUsers.includes(conversation.otherUser.id) && (
+                          <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green border-2 border-white dark:border-gray-800"></div>
                         )}
-                        {conversation.unreadCount > 0 && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue text-white mt-1">
-                            {conversation.unreadCount} new
+                      </div>
+                      <div className="ml-3 flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline">
+                          <div className="flex items-center">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                              {conversation.otherUser.name}
+                            </p>
+                            {conversation.task && (
+                              <span className="ml-2 flex items-center text-xs text-blue-600 dark:text-blue-400">
+                                <Briefcase size={12} className="mr-1" />
+                                Task
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-1">
+                            {formatLastActive(conversation.lastMessage.created_at)}
                           </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-8 text-center">
-                  <MessageSquare className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                  <h3 className="text-gray-500 mb-1">No conversations yet</h3>
-                  <p className="text-sm text-gray-400">Start a new conversation or select a contact</p>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Contacts Tab */}
-            <TabsContent value="contacts" className="flex-1 overflow-y-auto">
-              {loading ? (
-                <div className="p-4 space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center p-2 animate-pulse">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full mr-3"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : filteredHelpers.length > 0 ? (
-                <div className="divide-y divide-gray-200">
-                  {filteredHelpers.map((helper) => (
-                    <div
-                      key={helper.id}
-                      className="p-3 flex items-center hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => handleStartConversation(helper)}
-                    >
-                      <div className="relative mr-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarFallback>{getInitials(helper.name)}</AvatarFallback>
-                        </Avatar>
-                        {activeUsers.includes(helper.id) && (
-                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-gray-900 truncate">{helper.name}</h3>
-                        <p className="text-sm text-gray-500">
-                          {helper.role} • {helper.level}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {conversation.lastMessage.sender === currentUserId && "You: "}
+                          {conversation.task && !conversation.lastMessage.content.includes(conversation.task.title) && (
+                            <span className="text-blue-600 dark:text-blue-400">[{conversation.task.title}] </span>
+                          )}
+                          {conversation.lastMessage.content}
                         </p>
                       </div>
-                      <Button variant="ghost" size="sm" className="ml-2">
-                        <MessageSquare className="h-4 w-4" />
-                      </Button>
+                      {conversation.unreadCount > 0 && (
+                        <span className="ml-2 text-xs font-semibold text-white bg-red rounded-full px-2 py-1">
+                          {conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
+              ) : searchTerm ? (
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <Search className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No conversations found</p>
+                </div>
               ) : (
-                <div className="p-8 text-center">
-                  <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                  <h3 className="text-gray-500 mb-1">No contacts found</h3>
-                  <p className="text-sm text-gray-400">
-                    {searchTerm ? "Try a different search term" : "No team members available"}
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <MessageSquare className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No conversations yet</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Start chatting with someone from the Contacts tab
                   </p>
                 </div>
               )}
-            </TabsContent>
-          </Tabs>
+            </>
+          )}
 
-          {/* Sidebar Footer */}
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Clock className="h-4 w-4 text-gray-500 mr-2" />
-                <span className="text-sm text-gray-500">
-                  {conversations.length} conversation{conversations.length !== 1 ? "s" : ""}
-                </span>
+          {/* Contacts Tab */}
+          {activeTab === "contacts" && (
+            <div className="py-2">
+              {/* Team Members Section */}
+              <div className="mb-2">
+                <div className="px-4 py-2 flex items-center justify-between bg-gray-50 dark:bg-gray-900">
+                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase flex items-center">
+                    <Users size={14} className="mr-1" />
+                    Team Members
+                  </div>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {/* Count team members excluding current user */}
+                    {filteredTeamMembers.length}
+                  </span>
+                </div>
+
+                {filteredTeamMembers.length > 0 ? (
+                  <div>{filteredTeamMembers.map((user) => renderUserItem(user, true))}</div>
+                ) : currentUserInTeam ? (
+                  <div className="px-4 py-3 text-center">
+                    <div className="flex justify-center mb-2">
+                      <div className="h-12 w-12 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-700 dark:text-gray-300 overflow-hidden">
+                        {currentUserInTeam.profilePictureUrl ? (
+                          <img
+                            src={currentUserInTeam.profilePictureUrl || "/placeholder.svg"}
+                            alt={currentUserInTeam.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <User className="h-6 w-6" />
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{currentUserInTeam.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">You're the only team member</p>
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 text-center text-sm text-gray-500 dark:text-gray-400">
+                    No team members found
+                  </div>
+                )}
               </div>
-              <div className="text-sm text-gray-500">{activeUsers.length} online</div>
+
+              {/* Organization Users Section with toggle */}
+              <div>
+                <div
+                  className="px-4 py-2 flex items-center justify-between bg-gray-50 dark:bg-gray-900 cursor-pointer"
+                  onClick={() => setShowOrgUsers(!showOrgUsers)}
+                >
+                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase flex items-center">
+                    <Briefcase size={14} className="mr-1" />
+                    Request In Organization Members
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-xs text-gray-400 dark:text-gray-500 mr-2">{filteredOrgUsers.length}</span>
+                    {showOrgUsers ? (
+                      <ChevronDown size={16} className="text-gray-500" />
+                    ) : (
+                      <ChevronRight size={16} className="text-gray-500" />
+                    )}
+                  </div>
+                </div>
+
+                {showOrgUsers && (
+                  <>
+                    {filteredOrgUsers.length > 0 ? (
+                      <div>{filteredOrgUsers.map((user) => renderUserItem(user, true))}</div>
+                    ) : (
+                      <div className="px-4 py-3 text-center text-sm text-gray-500 dark:text-gray-400">
+                        No organization users found
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Show message if no users at all */}
+              {filteredTeamMembers.length === 0 && filteredOrgUsers.length === 0 && !currentUserInTeam && (
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4 mt-4">
+                  <UserPlus className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No contacts found</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Try adjusting your search</p>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
-      </div>
-    </>
+      )}
+    </div>
   )
 }
 

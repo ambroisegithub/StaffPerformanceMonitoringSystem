@@ -17,14 +17,14 @@ interface Organization {
   telephone?: string;
   email?: string;
   website?: string;
+  tinNumber?: string;
   // Contact Person Information
-  contactPersonName?: string;
-  contactPersonPosition?: string;
-  contactPersonTelephone?: string;
-  contactPersonEmail?: string;
-  dateOfRegistration?: string;
-  registrationNumber?: string;
-  sectorOfBusiness?: string;
+  contactPersons: Array<{
+    name: string;
+    position: string;
+    telephone: string;
+    email: string;
+  }>;
   // System Administrator Profile
   systemAdminFirstName?: string;
   systemAdminLastName?: string;
@@ -111,13 +111,7 @@ export const fetchOrganizations = createAsyncThunk(
     }
   }
 );
-// Create the fetchSummaryreportOfOrganization async thunk
-// This thunk fetches the summary report of the organization
-// It uses the organization ID from the Redux state
-// and makes a GET request to the API endpoint
-// The response data is returned as the payload
-// If an error occurs, it returns the error message
-// as the payload using rejectWithValue
+
 export const fetchSummaryreportOfOrganization = createAsyncThunk(
   "systemAdministrator/fetchSummaryreportOfOrganization",
   async (_, { rejectWithValue, getState }) => {
@@ -278,13 +272,20 @@ export const deleteOrganization = createAsyncThunk(
     }
   }
 );
+
 export const createOrganization = createAsyncThunk(
   "systemLeader/createOrganization",
   async (newOrgData: any, { dispatch, rejectWithValue }) => {
     try {
+      // Format the contact persons data for the backend
+      const formattedData = {
+        ...newOrgData,
+        contactPersons: newOrgData.contactPersons || [] // Ensure it's always an array
+      };
+
       await axios.post(
         `${import.meta.env.VITE_BASE_URL}/v1/organizations`,
-        newOrgData,
+        formattedData,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -461,8 +462,17 @@ const systemLeaderSlice = createSlice({
         state.updateLoading = false;
         state.updateError = action.payload as string;
       })
+      .addCase(createOrganization.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+        toast.success("Organization created successfully");
+      })
       .addCase(createOrganization.rejected, (state, action) => {
         state.error = action.payload as string;
+      })
+      .addCase(createOrganization.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
       .addCase(getOrganizationById.pending, (state) => {
         state.loading = true;

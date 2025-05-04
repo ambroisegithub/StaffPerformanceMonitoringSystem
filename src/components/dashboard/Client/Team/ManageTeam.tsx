@@ -19,6 +19,7 @@ import { AlertCircle, CheckCircle, Loader2, Plus, Search, X, BarChart2, Users } 
 import TeamTable from "./TeamTable"
 import TeamReportComponent from "./TeamReportComponent"
 import { useNavigate, Link } from "react-router-dom"
+import { fetchUsers } from "../../../../Redux/Slices/ManageUserSlice"
 
 // Update the component to include the TeamReportComponent
 const ManageTeam: React.FC = () => {
@@ -26,6 +27,17 @@ const ManageTeam: React.FC = () => {
   const { filteredTeams, loading, error, success, successMessage, isEditing } = useSelector(
     (state: RootState) => state.teamManagement,
   )
+
+
+
+    const { user: loggedInUser } = useSelector((state: RootState) => state.login);
+
+  useEffect(() => {
+    if (loggedInUser?.organization?.id) {
+      dispatch(fetchUsers(loggedInUser.organization.id));
+    }
+  }, [dispatch, loggedInUser]);
+
 
   const [searchTerm, setSearchTerm] = useState("")
   const [activeTab, setActiveTab] = useState("all")
@@ -102,17 +114,7 @@ const ManageTeam: React.FC = () => {
             <BarChart2 className="h-4 w-4" />
             Team Reports
           </Button>
-          {NavigatetoTeamCreatePage.map(({ path }) => (
-            <Link
-              key={path}
-              to={path}
-              className="bg-green outline-none text-white px-5 py-2 rounded-md flex flex-row items-center justify-between gap-2"
-              onClick={handleNavigateToCreateTeam}
-            >
-              <Plus className="text-white font-bold" size={20} />
-              Create Team
-            </Link>
-          ))}
+         
         </div>
       </div>
 

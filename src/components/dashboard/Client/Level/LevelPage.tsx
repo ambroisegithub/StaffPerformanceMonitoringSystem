@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client"
 
@@ -26,7 +27,7 @@ import { Switch } from "../../../ui/switch"
 import { Badge } from "../../../ui/Badge"
 import { Tabs, TabsList, TabsTrigger } from "../../../ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../ui/table"
-
+import { fetchUsers } from "../../../../Redux/Slices/ManageUserSlice"
 const LevelPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const { levels, filteredLevels, selectedLevel, loading, error, success, formData, isEditing } = useSelector(
@@ -42,6 +43,15 @@ const LevelPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(8)
+
+  
+  const { user: loggedInUser } = useSelector((state: RootState) => state.login);
+
+  useEffect(() => {
+    if (loggedInUser?.organization?.id) {
+      dispatch(fetchUsers(loggedInUser.organization.id));
+    }
+  }, [dispatch, loggedInUser]);
 
   useEffect(() => {
     dispatch(fetchAllLevels())
@@ -171,10 +181,13 @@ const LevelPage: React.FC = () => {
                   <CardTitle>Supervisory Levels</CardTitle>
                   <CardDescription>Manage organizational hierarchy with supervisory levels</CardDescription>
                 </div>
+                                {loggedInUser?.role !== "overall" && (
+
                 <Button onClick={() => setShowForm(true)} className="bg-green hover:bg-green-600 text-white">
                   <Plus className="mr-2 h-4 w-4" />
                   New Level
                 </Button>
+                                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -224,8 +237,11 @@ const LevelPage: React.FC = () => {
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead>Updated</TableHead>
+                                {loggedInUser?.role !== "overall" && (
+
                         <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
+                                )}
+                        </TableRow>
                     </TableHeader>
                     <TableBody>
                       {currentItems.map((level) => (
@@ -244,6 +260,8 @@ const LevelPage: React.FC = () => {
                           </TableCell>
                           <TableCell>{new Date(level.created_at).toLocaleDateString()}</TableCell>
                           <TableCell>{new Date(level.updated_at).toLocaleDateString()}</TableCell>
+                                {loggedInUser?.role !== "overall" && (
+                         
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button
@@ -266,6 +284,7 @@ const LevelPage: React.FC = () => {
                               </Button>
                             </div>
                           </TableCell>
+                                )}
                         </TableRow>
                       ))}
                     </TableBody>

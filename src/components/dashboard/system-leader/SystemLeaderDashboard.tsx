@@ -493,7 +493,7 @@ const SystemLeaderDashboard = () => {
                 <TableRow>
                   <TableHead className="whitespace-nowrap">Name</TableHead>
                   <TableHead className="hidden md:table-cell">Users</TableHead>
-                  <TableHead className="hidden lg:table-cell">Admin</TableHead>
+                  <TableHead className="hidden lg:table-cell">Status</TableHead>
                   <TableHead className="w-[150px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -510,16 +510,13 @@ const SystemLeaderDashboard = () => {
                       <Badge variant="outline">{org.stats.totalUsers}</Badge>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      {org.admin ? (
-                        <div>
-                          <p>{org.admin.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {org.admin.email}
-                          </p>
-                        </div>
+                      {org.status ? (
+                        <Badge variant="outline" className={org.status === "Active" ? "text-green" : "text-red"}>
+                          {org.status}
+                        </Badge>
                       ) : (
                         <Badge variant="outline" className="text-red">
-                          No admin
+                          No Status
                         </Badge>
                       )}
                     </TableCell>
@@ -529,7 +526,7 @@ const SystemLeaderDashboard = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-red border-red hover:bg-red hover:text-white transition-colors"
+                            className="text-white bg-red border-red transition-colors"
                             onClick={() => {
                               // Add loading state management
                               setActionInProgress(org.id);
@@ -541,7 +538,7 @@ const SystemLeaderDashboard = () => {
                           >
                             {actionInProgress === org.id ? (
                               <>
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin text-red" />
                                 Deactivating...
                               </>
                             ) : (
@@ -552,7 +549,7 @@ const SystemLeaderDashboard = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-green border-green hover:bg-green hover:text-white transition-colors"
+                            className="text-white bg-green border-green hover:bg-green hover:text-white transition-colors"
                             onClick={() => {
                               setActionInProgress(org.id);
                               dispatch(activateOrganization(org.id)).finally(
@@ -563,7 +560,7 @@ const SystemLeaderDashboard = () => {
                           >
                             {actionInProgress === org.id ? (
                               <>
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin text-white" />
                                 Activating...
                               </>
                             ) : (

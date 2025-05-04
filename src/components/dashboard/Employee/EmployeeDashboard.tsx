@@ -17,6 +17,7 @@ import { Button } from "../../ui/button"
 import { Calendar } from "../../ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover"
 import { format } from "date-fns"
+import ChatButton from "../../Chat/ChatButton"
 
 const EmployeeDashboard: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -85,6 +86,10 @@ const EmployeeDashboard: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Chat Button */}
+      {user?.id && user?.organization?.id ? (
+        <ChatButton userId={user.id} organizationId={user.organization.id} />
+      ) : null}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <h1 className="text-3xl font-bold">Employee Dashboard</h1>

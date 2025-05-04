@@ -102,7 +102,8 @@ const AdminDashHomePage = () => {
   }
 
   if (loading) {
-    return <Loader />; // Show loader while data is being fetched
+    return <Loader />;
+     // Show loader while data is being fetched
   }
   
   return (
@@ -124,8 +125,8 @@ const AdminDashHomePage = () => {
 
       {/* Time Range Filter */}
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Client Dashboard Overview</h1>
-        <select
+        <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">System Administrator Dashboard</h1>
+        {/* <select
           value={timeRange}
           onChange={(e) => setTimeRange(e.target.value)}
           className="p-2 border rounded-lg w-full sm:w-auto bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-600"
@@ -134,12 +135,12 @@ const AdminDashHomePage = () => {
           <option value="week">This Week</option>
           <option value="month">This Month</option>
           <option value="year">This Year</option>
-        </select>
+        </select> */}
       </div>
 
       {/* Summary report Cards */}
       {summaryReport && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
           {/* Card 1: Total Users */}
           <Card className="py-3 bg-white dark:bg-gray-800">
             <CardContent className="flex items-center p-4 md:p-6">
@@ -195,18 +196,6 @@ const AdminDashHomePage = () => {
             </CardContent>
           </Card>
 
-          {/* Card 5: Groups */}
-          <Card className="py-3 bg-white dark:bg-gray-800">
-            <CardContent className="flex items-center p-4 md:p-6">
-              <UserCheck className="h-6 w-6 md:h-8 md:w-8 text-red-500 dark:text-red-400 mr-4 shrink-0" />
-              <div>
-                <p className="text-xs md:text-sm text-gray-600 dark:text-gray-300">Groups</p>
-                <h3 className="text-lg md:text-2xl font-bold text-gray-800 dark:text-white">
-                  {summaryReport.totals.groups}
-                </h3>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
 

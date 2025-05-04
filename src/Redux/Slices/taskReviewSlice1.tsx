@@ -4,10 +4,8 @@ import axios from "axios"
 import { toast } from "react-toastify"
 
 export enum TaskStatus {
-  PENDING = "pending",
   IN_PROGRESS = "in_progress",
   COMPLETED = "completed",
-  DELAYED = "delayed",
 }
 
 export enum ReviewStatus {

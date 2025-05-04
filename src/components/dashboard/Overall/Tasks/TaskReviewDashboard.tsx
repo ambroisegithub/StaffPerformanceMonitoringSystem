@@ -170,12 +170,10 @@ const TaskReviewDashboard: React.FC = () => {
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white">
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value={TaskStatus.PENDING || "pending"}>Pending</SelectItem>
                     <SelectItem value={TaskStatus.IN_PROGRESS || "in_progress"}>In Progress</SelectItem>
                     <SelectItem value={TaskStatus.COMPLETED}>Completed</SelectItem>
-                    <SelectItem value={TaskStatus.DELAYED}>Delayed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

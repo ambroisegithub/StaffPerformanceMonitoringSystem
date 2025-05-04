@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client"
 
 import React from "react"
@@ -24,11 +25,12 @@ import {
   Search,
   List,
   Grid,
+  MessageSquare,
 } from "lucide-react"
 import { Badge } from "../../../ui/Badge"
 import TaskCard from "./TaskCard"
 import { Input } from "../../../ui/input"
-import TaskChatButton from "../../../Chat/TaskChatButton"
+import { toggleChat } from "../../../Chat/chatSlice"
 
 interface TaskListProps {
   teamTasks: TeamTasksData[]
@@ -39,8 +41,6 @@ interface TaskListProps {
 
 const TaskList: React.FC<TaskListProps> = ({ teamTasks, loading, onOpenReviewModal, filters }) => {
   const dispatch = useAppDispatch()
-  const [expandedMembers, setExpandedMembers] = useState<Record<number, boolean>>({})
-  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({})
   const [expandedTasks, setExpandedTasks] = useState<Record<number, boolean>>({})
   const [viewMode, setViewMode] = useState<"list" | "grid">("list")
   const [localSearch, setLocalSearch] = useState("")
@@ -48,32 +48,7 @@ const TaskList: React.FC<TaskListProps> = ({ teamTasks, loading, onOpenReviewMod
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const currentUser = useAppSelector((state) => state.login.user)
   const organizationId = currentUser?.organization?.id
-
-  // Initialize all members as expanded by default
-  useEffect(() => {
-    if (teamTasks.length > 0) {
-      const initialExpandedState: Record<number, boolean> = {}
-      teamTasks.forEach((member) => {
-        initialExpandedState[member.user.id] = false
-      })
-      setExpandedMembers(initialExpandedState)
-    }
-  }, [teamTasks])
-
-  const toggleMemberExpanded = (memberId: number) => {
-    setExpandedMembers((prev) => ({
-      ...prev,
-      [memberId]: !prev[memberId],
-    }))
-  }
-
-  const toggleDateExpanded = (memberId: number, date: string) => {
-    const key = `${memberId}-${date}`
-    setExpandedDates((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }
+  const conversations = useAppSelector((state) => state.chat.conversations)
 
   const toggleTaskExpanded = (taskId: number) => {
     setExpandedTasks((prev) => ({
@@ -85,6 +60,35 @@ const TaskList: React.FC<TaskListProps> = ({ teamTasks, loading, onOpenReviewMod
   const handleSelectTask = (task: Task) => {
     dispatch(setSelectedTask(task))
     onOpenReviewModal()
+  }
+
+  const handleOpenTaskChat = (task: Task, userId: number, userName: string) => {
+    // Store task context in localStorage with autoOpen flag
+    localStorage.setItem(
+      "taskChatContext",
+      JSON.stringify({
+        taskId: task.id,
+        taskTitle: task.title,
+        taskDescription: task.description, // Include description as well
+        userId: userId,
+        userName: userName,
+        autoOpen: true,
+      }),
+    )
+
+    // Find any existing conversation with this user
+    const existingConversations = conversations.filter((conv) => conv.otherUser.id === userId)
+
+    // Log for debugging
+    console.log("Opening task chat:", {
+      taskId: task.id,
+      taskTitle: task.title,
+      userId,
+      existingConversations: existingConversations.length,
+    })
+
+    // Open the chat modal
+    dispatch(toggleChat())
   }
 
   const getStatusBadge = (status: string) => {
@@ -230,6 +234,13 @@ const TaskList: React.FC<TaskListProps> = ({ teamTasks, loading, onOpenReviewMod
     }
   }
 
+  const truncateWords = (text: string, wordLimit: number) => {
+    if (!text) return ""
+    const words = text.split(" ")
+    if (words.length <= wordLimit) return text
+    return words.slice(0, wordLimit).join(" ") + "..."
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -319,10 +330,9 @@ const TaskList: React.FC<TaskListProps> = ({ teamTasks, loading, onOpenReviewMod
       {sortedTeamTasks.length > 0 && (
         <div className="space-y-6">
           {sortedTeamTasks.map((teamMember) => {
-            const isMemberExpanded = expandedMembers[teamMember.user.id] === true
-            const submissionDates = Object.keys(teamMember.submissions).sort(
-              (a, b) => new Date(b).getTime() - new Date(a).getTime(),
-            )
+            // Always expanded: show tasks for every user by default
+            const allTasks: Task[] = Object.values(teamMember.submissions)
+              .flatMap((submission: any) => submission.tasks)
 
             const stats = memberStats[teamMember.user.id] || { total: 0, pending: 0, approved: 0, rejected: 0 }
 
@@ -335,16 +345,11 @@ const TaskList: React.FC<TaskListProps> = ({ teamTasks, loading, onOpenReviewMod
                 transition={{ duration: 0.3 }}
               >
                 <div
-                  className="bg-gray-50 p-4 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition-colors"
-                  onClick={() => toggleMemberExpanded(teamMember.user.id)}
+                  className="bg-gray-50 p-4 flex justify-between items-center transition-colors"
                 >
                   <div className="flex items-center">
                     <div className="mr-3">
-                      {isMemberExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-gray-500" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 text-gray-500" />
-                      )}
+                      {/* No expand/collapse icon */}
                     </div>
                     <div>
                       <div className="flex items-center text-sm text-gray-500">
@@ -356,281 +361,195 @@ const TaskList: React.FC<TaskListProps> = ({ teamTasks, loading, onOpenReviewMod
                       </div>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-3">
-                    {/* Task Statistics */}
-                    <div className="hidden md:flex items-center gap-2">
-                      <Badge className="bg-blue text-white border-blue">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {stats.pending} pending
-                      </Badge>
-                      <Badge className="bg-green text-white border-green">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        {stats.approved} approved
-                      </Badge>
-                      <Badge className="bg-red text-white border-red">
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        {stats.rejected} rejected
-                      </Badge>
-                    </div>
-
                     <Badge className="bg-gray-100 text-gray-700 border-gray-200">
-                      {submissionDates.length} submission{submissionDates.length !== 1 ? "s" : ""}
+                      {allTasks.length} task{allTasks.length !== 1 ? "s" : ""}
                     </Badge>
                   </div>
                 </div>
 
-                <AnimatePresence>
-                  {isMemberExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      {/* Mobile Task Statistics */}
-                      <div className="md:hidden flex items-center justify-center gap-2 p-3 bg-gray-50 border-t border-gray-200">
-                        <Badge className="bg-blue text-white border-blue">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {stats.pending} pending
-                        </Badge>
-                        <Badge className="bg-green text-white border-green">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          {stats.approved} approved
-                        </Badge>
-                        <Badge className="bg-red text-white border-red">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          {stats.rejected} rejected
-                        </Badge>
-                      </div>
+                {/* Always show tasks for each user */}
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {/* Mobile Task Statistics */}
+                  <div className="md:hidden flex items-center justify-center gap-2 p-3 bg-gray-50 border-t border-gray-200">
+                    <Badge className="bg-blue text-white border-blue">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {stats.pending} pending
+                    </Badge>
+                    <Badge className="bg-green text-white border-green">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      {stats.approved} approved
+                    </Badge>
+                    <Badge className="bg-red text-white border-red">
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      {stats.rejected} rejected
+                    </Badge>
+                  </div>
 
-                      <div className="divide-y divide-gray-200">
-                        {submissionDates.map((date) => {
-                          const submission = teamMember.submissions[date]
-                          const dateKey = `${teamMember.user.id}-${date}`
-                          const isDateExpanded = expandedDates[dateKey] === true
-
-                          return (
-                            <div key={date} className="p-4">
-                              <div
-                                className="flex justify-between items-center cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
-                                onClick={() => toggleDateExpanded(teamMember.user.id, date)}
+                  {/* Flat list of all tasks for this member */}
+                  <div className="p-4">
+                    <div className="overflow-x-auto">
+                      <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
+                        <table className="w-full text-sm text-left text-gray-500">
+                          <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                              <th scope="col" className="px-6 py-3">
+                                Title
+                              </th>
+                              <th scope="col" className="px-6 py-3 hidden md:table-cell">
+                                Description
+                              </th>
+                              {/* <th scope="col" className="px-6 py-3 hidden lg:table-cell">
+                                Company
+                              </th> */}
+                              <th scope="col" className="px-6 py-3 hidden xl:table-cell">
+                                Department
+                              </th>
+                              <th scope="col" className="px-6 py-3 hidden xl:table-cell">
+                                Project
+                              </th>
+                              <th scope="col" className="px-6 py-3">
+                                Status
+                              </th>
+                              <th scope="col" className="px-6 py-3">
+                                Action
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allTasks.map((task) => (
+                              <tr
+                                key={task.id}
+                                className="bg-white border-b hover:bg-gray-50 transition-colors"
                               >
-                                <div className="flex items-center">
-                                  <div className="mr-2">
-                                    {isDateExpanded ? (
-                                      <ChevronDown className="w-4 h-4 text-gray-500" />
-                                    ) : (
-                                      <ChevronRight className="w-4 h-4 text-gray-500" />
-                                    )}
+                                <th
+                                  scope="row"
+                                  className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap"
+                                >
+                                  <div className="flex items-center">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setExpandedTasks((prev) => ({
+                                          ...prev,
+                                          [task.id]: !prev[task.id],
+                                        }))
+                                      }}
+                                      className="mr-2"
+                                    >
+                                      {expandedTasks[task.id] ? (
+                                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                                      )}
+                                    </button>
+                                    {truncateWords(task.title, 3)}
                                   </div>
-                                  <div>
+                                  <AnimatePresence>
+                                    {expandedTasks[task.id] && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="mt-2 ml-6 text-sm text-gray-500 bg-gray-50 p-3 rounded-md"
+                                      >
+                                        <p className="mb-2">{task.description}</p>
+                                        {task.contribution && (
+                                          <div className="mb-2">
+                                            <span className="font-medium">Contribution:</span>{" "}
+                                            {task.contribution}
+                                          </div>
+                                        )}
+                                        {task.achieved_deliverables && (
+                                          <div>
+                                            <span className="font-medium">Deliverables:</span>{" "}
+                                            {task.achieved_deliverables}
+                                          </div>
+                                        )}
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </th>
+                                <td className="px-6 py-4 max-w-xs truncate hidden md:table-cell">
+                                  {task.description}
+                                </td>
+
+                                <td className="px-6 py-4 hidden xl:table-cell">
+                                  {task.department ? (
                                     <div className="flex items-center">
-                                      <Calendar className="h-4 w-4 text-gray-500 mr-1.5" />
-                                      <h4 className="font-medium text-gray-700">
-                                        Submitted on {formatDate(submission.date)}
-                                      </h4>
+                                      <Briefcase className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
+                                      {task.department}
                                     </div>
-                                    <p className="text-sm text-gray-500 ml-5.5">
-                                      {submission.tasks.length} task{submission.tasks.length !== 1 ? "s" : ""}
-                                    </p>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 hidden xl:table-cell">
+                                  {task.related_project ? (
+                                    <div className="flex items-center">
+                                      <FileText className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
+                                      {task.related_project}
+                                    </div>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td className="px-6 py-4">{getStatusBadge(task.review_status)}</td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleSelectTask(task)}
+                                      disabled={task.reviewed}
+                                      className={`px-3 py-1.5 text-sm font-medium rounded-md flex items-center ${
+                                        task.reviewed
+                                          ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                          : "bg-green text-white hover:bg-green"
+                                      }`}
+                                      aria-label={task.reviewed ? "Already reviewed" : "Review task"}
+                                    >
+                                      {task.reviewed ? (
+                                        <>
+                                          <EyeOff className="h-3.5 w-3.5 mr-1.5" />
+                                          Reviewed
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Eye className="h-3.5 w-3.5 mr-1.5" />
+                                          Review
+                                        </>
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleOpenTaskChat(
+                                          task,
+                                          teamMember.user.id,
+                                          teamMember.user.username,
+                                        )
+                                      }}
+                                      className="px-3 py-1.5 text-sm font-medium rounded-md flex items-center bg-blue text-white hover:bg-blue-600"
+                                      aria-label="Chat about task"
+                                    >
+                                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                                      Chat
+                                    </button>
                                   </div>
-                                </div>
-
-                                {/* Add chat button for daily tasks submission */}
-                                {currentUser && organizationId && (
-                                  <TaskChatButton
-                                    taskId={submission.dailyTasksId}
-                                    userId={currentUser.id}
-                                    organizationId={organizationId}
-                                    helperId={teamMember.user.id}
-                                    isDailyTask={true}
-                                  />
-                                )}
-                              </div>
-
-                              <AnimatePresence>
-                                {isDateExpanded && (
-                                  <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="mt-3"
-                                  >
-                                    {viewMode === "list" ? (
-                                      <div className="overflow-x-auto">
-                                        <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
-                                          <table className="w-full text-sm text-left text-gray-500">
-                                            <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                                              <tr>
-                                                <th scope="col" className="px-6 py-3">
-                                                  Title
-                                                </th>
-                                                <th scope="col" className="px-6 py-3 hidden md:table-cell">
-                                                  Description
-                                                </th>
-                                                <th scope="col" className="px-6 py-3 hidden lg:table-cell">
-                                                  Company
-                                                </th>
-                                                <th scope="col" className="px-6 py-3 hidden xl:table-cell">
-                                                  Department
-                                                </th>
-                                                <th scope="col" className="px-6 py-3 hidden xl:table-cell">
-                                                  Project
-                                                </th>
-                                                <th scope="col" className="px-6 py-3">
-                                                  Status
-                                                </th>
-                                                <th scope="col" className="px-6 py-3">
-                                                  Action
-                                                </th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {submission.tasks.map((task) => (
-                                                <tr
-                                                  key={task.id}
-                                                  className="bg-white border-b hover:bg-gray-50 transition-colors"
-                                                >
-                                                  <th
-                                                    scope="row"
-                                                    className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap"
-                                                  >
-                                                    <div className="flex items-center">
-                                                      <button
-                                                        onClick={(e) => {
-                                                          e.stopPropagation()
-                                                          toggleTaskExpanded(task.id)
-                                                        }}
-                                                        className="mr-2"
-                                                      >
-                                                        {expandedTasks[task.id] ? (
-                                                          <ChevronDown className="h-4 w-4 text-gray-400" />
-                                                        ) : (
-                                                          <ChevronRight className="h-4 w-4 text-gray-400" />
-                                                        )}
-                                                      </button>
-                                                      {task.title}
-                                                    </div>
-
-                                                    {/* Expanded Task Details */}
-                                                    <AnimatePresence>
-                                                      {expandedTasks[task.id] && (
-                                                        <motion.div
-                                                          initial={{ height: 0, opacity: 0 }}
-                                                          animate={{ height: "auto", opacity: 1 }}
-                                                          exit={{ height: 0, opacity: 0 }}
-                                                          transition={{ duration: 0.2 }}
-                                                          className="mt-2 ml-6 text-sm text-gray-500 bg-gray-50 p-3 rounded-md"
-                                                        >
-                                                          <p className="mb-2">{task.description}</p>
-                                                          {task.contribution && (
-                                                            <div className="mb-2">
-                                                              <span className="font-medium">Contribution:</span>{" "}
-                                                              {task.contribution}
-                                                            </div>
-                                                          )}
-                                                          {task.achieved_deliverables && (
-                                                            <div>
-                                                              <span className="font-medium">Deliverables:</span>{" "}
-                                                              {task.achieved_deliverables}
-                                                            </div>
-                                                          )}
-                                                        </motion.div>
-                                                      )}
-                                                    </AnimatePresence>
-                                                  </th>
-                                                  <td className="px-6 py-4 max-w-xs truncate hidden md:table-cell">
-                                                    {task.description}
-                                                  </td>
-                                                  <td className="px-6 py-4 hidden lg:table-cell">
-                                                    <div className="flex items-center">
-                                                      <Building className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
-                                                      {task.company}
-                                                    </div>
-                                                  </td>
-                                                  <td className="px-6 py-4 hidden xl:table-cell">
-                                                    {task.department ? (
-                                                      <div className="flex items-center">
-                                                        <Briefcase className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
-                                                        {task.department}
-                                                      </div>
-                                                    ) : (
-                                                      "-"
-                                                    )}
-                                                  </td>
-                                                  <td className="px-6 py-4 hidden xl:table-cell">
-                                                    {task.related_project ? (
-                                                      <div className="flex items-center">
-                                                        <FileText className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
-                                                        {task.related_project}
-                                                      </div>
-                                                    ) : (
-                                                      "-"
-                                                    )}
-                                                  </td>
-                                                  <td className="px-6 py-4">{getStatusBadge(task.review_status)}</td>
-                                                  <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                      <button
-                                                        onClick={() => handleSelectTask(task)}
-                                                        disabled={task.reviewed}
-                                                        className={`px-3 py-1.5 text-sm font-medium rounded-md flex items-center ${
-                                                          task.reviewed
-                                                            ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                                                            : "bg-green text-white hover:bg-green"
-                                                        }`}
-                                                        aria-label={task.reviewed ? "Already reviewed" : "Review task"}
-                                                      >
-                                                        {task.reviewed ? (
-                                                          <>
-                                                            <EyeOff className="h-3.5 w-3.5 mr-1.5" />
-                                                            Reviewed
-                                                          </>
-                                                        ) : (
-                                                          <>
-                                                            <Eye className="h-3.5 w-3.5 mr-1.5" />
-                                                            Review
-                                                          </>
-                                                        )}
-                                                      </button>
-
-                                                      {/* Add chat button for individual task */}
-                                                      {currentUser && organizationId && (
-                                                        <TaskChatButton
-                                                          taskId={task.id}
-                                                          userId={currentUser.id}
-                                                          organizationId={organizationId}
-                                                          helperId={teamMember.user.id}
-                                                          isDailyTask={false}
-                                                        />
-                                                      )}
-                                                    </div>
-                                                  </td>
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-2">
-                                        {submission.tasks.map((task) => (
-                                          <TaskCard key={task.id} task={task} onSelect={() => handleSelectTask(task)} />
-                                        ))}
-                                      </div>
-                                    )}
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          )
-                        })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    </div>
+                  </div>
+                </motion.div>
               </motion.div>
             )
           })}

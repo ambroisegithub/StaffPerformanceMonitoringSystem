@@ -5,8 +5,13 @@ import { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Filter, X, Calendar, Users, CheckSquare } from "lucide-react"
 import type { TaskReviewFilters } from "../../../../Redux/Slices/TaskReviewSlice"
-import { useAppSelector } from "../../../../Redux/hooks"
-import { selectTeamTasks } from "../../../../Redux/Slices/TaskReviewSlice"
+import { useAppSelector, useAppDispatch } from "../../../../Redux/hooks"
+import { 
+  selectTeamTasks, 
+  selectSupervisorTeamData,
+  fetchTeamTasks 
+} from "../../../../Redux/Slices/TaskReviewSlice"
+import { getSupervisorId } from "../../../../utilis/auth"
 import { Badge } from "../../../ui/Badge"
 
 interface FilterSectionProps {
@@ -15,24 +20,91 @@ interface FilterSectionProps {
 }
 
 const FilterSection: React.FC<FilterSectionProps> = ({ filters, onFilterChange }) => {
+  const dispatch = useAppDispatch()
   const [localFilters, setLocalFilters] = useState<TaskReviewFilters>(filters)
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeFiltersCount, setActiveFiltersCount] = useState(0)
+  const [teamMembers, setTeamMembers] = useState<Array<{id: number, username: string, level: string}>>([])
+  const [loadingMembers, setLoadingMembers] = useState(false)
+  
   const teamTasks = useAppSelector(selectTeamTasks)
+  const supervisorTeamData = useAppSelector(selectSupervisorTeamData)
 
-  // Extract unique users from teamTasks
+  // Fetch team members directly using fetchTeamTasks
+  useEffect(() => {
+    const loadTeamMembers = async () => {
+      const supervisorId = getSupervisorId()
+      if (!supervisorId) return
+
+      setLoadingMembers(true)
+      try {
+        // Fetch team tasks to get team members directly
+        const result = await dispatch(fetchTeamTasks({
+          supervisorId,
+          page: 1,
+          limit: 100, // Get more items to ensure we get all team members
+          filters: {} // No filters to get all team members
+        })).unwrap()
+
+        // Extract unique users from the fetched data
+        if (result.data && result.data.length > 0) {
+          const users = result.data.map((task: any) => ({
+            id: task.user.id,
+            username: task.user.username,
+            level: task.user.level,
+          }))
+          const uniqueUsers = Array.from(
+            new Map(users.map((user: any) => [user.id, user])).values()
+          ) as Array<{ id: number; username: string; level: string }>
+          setTeamMembers(uniqueUsers)
+        }
+      } catch (error) {
+        console.error('Failed to fetch team members:', error)
+        // Fallback to existing data if fetch fails
+        if (supervisorTeamData && supervisorTeamData.members) {
+          const fallbackUsers = supervisorTeamData.members.map(member => ({
+            id: member.id,
+            username: member.username,
+            level: member.level
+          }))
+          setTeamMembers(fallbackUsers)
+        }
+      } finally {
+        setLoadingMembers(false)
+      }
+    }
+
+    loadTeamMembers()
+  }, [dispatch])
+
+  // Alternative approach: Extract unique users from existing teamTasks or supervisorTeamData as fallback
   const uniqueUsers = useMemo(() => {
-    if (!teamTasks || teamTasks.length === 0) return []
+    // If we have fetched team members directly, use those
+    if (teamMembers.length > 0) {
+      return teamMembers
+    }
 
-    const users = teamTasks.map((task) => ({
-      id: task.user.id,
-      username: task.user.username,
-      level: task.user.level,
-    }))
+    // Fallback: Try to get from teamTasks if available
+    if (teamTasks && teamTasks.length > 0) {
+      const users = teamTasks.map((task) => ({
+        id: task.user.id,
+        username: task.user.username,
+        level: task.user.level,
+      }))
+      return Array.from(new Map(users.map((user) => [user.id, user])).values())
+    }
+    
+    // Final fallback: Get from supervisorTeamData if teamTasks is empty
+    if (supervisorTeamData && supervisorTeamData.members && supervisorTeamData.members.length > 0) {
+      return supervisorTeamData.members.map(member => ({
+        id: member.id,
+        username: member.username,
+        level: member.level
+      }))
+    }
 
-    // Remove duplicates by ID
-    return Array.from(new Map(users.map((user) => [user.id, user])).values())
-  }, [teamTasks])
+    return []
+  }, [teamMembers, teamTasks, supervisorTeamData])
 
   useEffect(() => {
     setLocalFilters(filters)
@@ -123,7 +195,7 @@ const FilterSection: React.FC<FilterSectionProps> = ({ filters, onFilterChange }
             {localFilters.userName && (
               <Badge className="bg-purple-50 text-purple-700 border-purple-200 flex items-center gap-1 pl-2 pr-1 py-1">
                 <Users className="h-3 w-3 mr-1" />
-                Team Member: {uniqueUsers.find((u) => u.username === localFilters.userName)?.username}
+                Team Member: {localFilters.userName}
                 <button
                   onClick={() => clearSingleFilter("userName")}
                   className="ml-1 p-0.5 hover:bg-purple-100 rounded-full"
@@ -189,16 +261,19 @@ const FilterSection: React.FC<FilterSectionProps> = ({ filters, onFilterChange }
                   name="userName"
                   value={localFilters.userName || ""}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  disabled={loadingMembers}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 disabled:opacity-50"
                 >
-                  <option value="">All Team Members</option>
+                  <option value="">
+                    {loadingMembers ? "Loading team members..." : "All Team Members"}
+                  </option>
                   {uniqueUsers.map((user) => (
                     <option key={user.id} value={user.username}>
                       {user.username}
                     </option>
                   ))}
                 </select>
-              </div>{" "}
+              </div>
               {/* Date Range Filters */}
               <div>
                 <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
@@ -249,4 +324,3 @@ const FilterSection: React.FC<FilterSectionProps> = ({ filters, onFilterChange }
 }
 
 export default FilterSection
-

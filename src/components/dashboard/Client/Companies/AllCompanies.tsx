@@ -1,5 +1,5 @@
-
 // @ts-nocheck
+
 "use client"
 
 import React from "react"
@@ -55,6 +55,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../ui/di
 import { Badge } from "../../../ui/Badge"
 import Loader from "../../../ui/Loader"
 import CompanySummaryReport from "./CompanySummaryReport"
+import { fetchUsers } from "../../../../Redux/Slices/ManageUserSlice"
 // Validation schema for edit form
 const validationSchema = Yup.object().shape({
   name: Yup.string().required("Company name is required"),
@@ -100,8 +101,14 @@ const ManageCompaniesPage: React.FC = () => {
   const [groups, setGroups] = useState<IGroup[]>([])
   const [isViewUsersModalOpen, setIsViewUsersModalOpen] = useState(false)
   const [companyUsers, setCompanyUsers] = useState<any[]>([])
-  const [activeTab, setActiveTab] = useState("all")
+  const { user: loggedInUser } = useSelector((state: RootState) => state.login);
 
+  const [activeTab, setActiveTab] = useState("levels");
+  useEffect(() => {
+    if (loggedInUser?.organization?.id) {
+      dispatch(fetchUsers(loggedInUser.organization.id));
+    }
+  }, [dispatch, loggedInUser]);
   // Fetch companies and groups on component mount
   const { user } = useSelector((state: RootState) => state.login); 
   useEffect(() => {
@@ -356,7 +363,7 @@ const ManageCompaniesPage: React.FC = () => {
                           ))}
                       </div>
                     </TableHead>
-                    <TableHead className="cursor-pointer" onClick={() => requestSort("group")}>
+                    {/* <TableHead className="cursor-pointer" onClick={() => requestSort("group")}>
                       <div className="flex items-center">
                         Group
                         {sortConfig?.key === "group" &&
@@ -366,7 +373,7 @@ const ManageCompaniesPage: React.FC = () => {
                             <ChevronDown className="ml-1 h-4 w-4" />
                           ))}
                       </div>
-                    </TableHead>
+                    </TableHead> */}
                     <TableHead className="cursor-pointer" onClick={() => requestSort("departments")}>
                       <div className="flex items-center">
                         Departments
@@ -378,8 +385,10 @@ const ManageCompaniesPage: React.FC = () => {
                           ))}
                       </div>
                     </TableHead>
+                                         {loggedInUser?.role !== "overall" && (
          
                     <TableHead className="text-right">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -399,7 +408,7 @@ const ManageCompaniesPage: React.FC = () => {
                           <span className="text-gray-400">Not provided</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      {/* <TableCell>
                         {company.group ? (
                           <div className="flex items-center">
                             <Building2 className="mr-2 h-4 w-4 text-blue" />
@@ -408,12 +417,13 @@ const ManageCompaniesPage: React.FC = () => {
                         ) : (
                           <span className="text-gray-400">Independent</span>
                         )}
-                      </TableCell>
+                      </TableCell> */}
                       <TableCell>
                         <Badge variant="outline" className="bg-blue text-white border-blue">
                           {company.departments?.length || 0} departments
                         </Badge>
                       </TableCell>
+                                {loggedInUser?.role !== "overall" && (
 
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -440,6 +450,7 @@ const ManageCompaniesPage: React.FC = () => {
                           </Button>
                         </div>
                       </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -582,7 +593,7 @@ const ManageCompaniesPage: React.FC = () => {
                         <ErrorMessage name="tin" component="div" className="mt-1 text-sm text-red" />
                       </div>
 
-                      {/* Group Selection */}
+                      {/* Group Selection
                       <div>
                         <label htmlFor="group_id" className="block text-sm font-medium text-gray-700 mb-1">
                           Parent Group
@@ -599,7 +610,7 @@ const ManageCompaniesPage: React.FC = () => {
                             </option>
                           ))}
                         </Field>
-                      </div>
+                      </div> */}
 
                       <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                         <Button

@@ -18,7 +18,7 @@ import ManageUser from "../pages/ManageUser.page";
 import PasswordResetRequestForm from "../pages/PasswordResetRequestForm";
 import TwoFactorAuth from "../pages/TwoFactorAuth";
 import ConfirmToChangePassword from "../pages/ConfirmToChangePassword";
-import GroupPage from "../components/dashboard/Client/Group/GroupPage";
+import OrganizationPage from "../components/dashboard/Client/Group/OrganizationPage";
 import RegisterPage from "../components/dashboard/Client/User/RegisterPage";
 import SuperVisorDashHome from "../components/dashboard/SuperVisor/SuperVisorDashHome";
 import SuperVisorDashboardLayout from "../components/dashboard/SuperVisor/SuperVisorDashbordLayout";
@@ -40,6 +40,15 @@ import CreatePageOrganization from "../components/dashboard/system-leader/Organi
 import SupervisoryManagementPage from "../components/dashboard/Client/Level/SupervisoryManagementPage";
 import ChangeSystemLeader from "../components/dashboard/system-leader/ChangeSystemLeader";
 import OverAllDashHomePage from "../components/dashboard/Overall/OverAllDashHome";
+import OverallProfilePage from "../components/dashboard/Overall/OverallProfilePage";
+import SupervisorProfilePage from "../components/dashboard/SuperVisor/SupervisorProfilePage";
+import AdminProfilePage from "../components/dashboard/Client/AdminProfilePage";
+import SystemLeaderProfilePage from "../components/dashboard/system-leader/SystemLeaderProfilePage";
+import ClientsProfilePage from "../components/dashboard/system-leader/ClientsProfilePage";
+import UserTaskReport from "../components/dashboard/Overall/Report/UserTaskReport";
+import UserReportSelection from "../components/dashboard/Overall/Report/UserReportSelection";
+import UserReportSelection1 from "../components/dashboard/Client/UserReportSelection";
+
 const AppRoutes: FunctionComponent = () => {
   return (
     <BrowserRouter>
@@ -80,6 +89,22 @@ const AppRoutes: FunctionComponent = () => {
               </ProtectedRoute>
             }
           />
+                          <Route
+          path="/admin/user/report"
+          element={
+            <ProtectedRoute roles={["client", "overall"]}>
+              <UserReportSelection1 />
+            </ProtectedRoute>
+          }
+        />
+          <Route
+            path="/admin/user/:userId/report"
+            element={
+              <ProtectedRoute roles={["client", "overall"]}>
+                <UserTaskReport />
+              </ProtectedRoute>
+            }
+          />
           <Route index path="admin/all-tasks" element={<AdminTaskTable />} />
           <Route index path="admin/level" element={<AdminLevelsPage />} />
 
@@ -110,6 +135,14 @@ const AppRoutes: FunctionComponent = () => {
               </ProtectedRoute>
             }
           />
+            <Route
+            path="/admin/profile"
+            element={
+              <ProtectedRoute roles={["client"]}>
+                <AdminProfilePage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/admin/team"
@@ -132,7 +165,7 @@ const AppRoutes: FunctionComponent = () => {
             path="/admin/create-group"
             element={
               <ProtectedRoute roles={["client"]}>
-                <GroupPage />
+                <OrganizationPage />
               </ProtectedRoute>
             }
           />
@@ -197,6 +230,22 @@ const AppRoutes: FunctionComponent = () => {
 
         {/* Overall dash layout */}
         <Route element={<OverallDashbordLayout />}>
+                <Route
+          path="/overall/user/report"
+          element={
+            <ProtectedRoute roles={["client", "overall"]}>
+              <UserReportSelection />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/overall/user/:userId/report"
+          element={
+            <ProtectedRoute roles={["client", "overall"]}>
+              <UserTaskReport />
+            </ProtectedRoute>
+          }
+        />
           <Route
             index
             path="/overall"
@@ -228,6 +277,14 @@ const AppRoutes: FunctionComponent = () => {
               </ProtectedRoute>
             }
           />
+               <Route
+                  path="/overall/profile"
+                  element={
+                    <ProtectedRoute roles={["overall"]}>
+                      <OverallProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
           <Route
             path="/overall/manage-position"
             element={
@@ -258,7 +315,7 @@ const AppRoutes: FunctionComponent = () => {
             path="/overall/create-group"
             element={
               <ProtectedRoute roles={["overall"]}>
-                <GroupPage />
+                <OrganizationPage />
               </ProtectedRoute>
             }
           />
@@ -332,6 +389,15 @@ const AppRoutes: FunctionComponent = () => {
               </ProtectedRoute>
             }
           />
+                    <Route
+            index
+            path="/super-visor/profile"
+            element={
+              <ProtectedRoute roles={["supervisor"]}>
+                <SupervisorProfilePage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/supervisor/task-report"
             element={
@@ -380,6 +446,7 @@ const AppRoutes: FunctionComponent = () => {
               </ProtectedRoute>
             }
           />
+          {/* SystemLeaderProfilePage */}
           <Route
             path="/system-leader/create-organization"
             element={
@@ -388,11 +455,27 @@ const AppRoutes: FunctionComponent = () => {
               </ProtectedRoute>
             }
           />
+            <Route
+            path="/system-leader/profile"
+            element={
+              <ProtectedRoute roles={["system_leader"]}>
+                <SystemLeaderProfilePage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/system-leader/change-system-leader"
             element={
               <ProtectedRoute roles={["system_leader"]}>
                 <ChangeSystemLeader />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/system-leader/clients-profile"
+            element={
+              <ProtectedRoute roles={["system_leader"]}>
+                <ClientsProfilePage />
               </ProtectedRoute>
             }
           />

@@ -7,7 +7,7 @@ import manageUserReducer from "./Slices/ManageUserSlice"
 import twoFactorAuthReducer from "./Slices/twoFactorAuthSlice"
 import passwordResetRequestReducer from "./Slices/PasswordResetRequestSlice"
 import confirmPasswordResetReducer from "./Slices/confirmPasswordResetSlice"
-import groupReducer from "./Slices/GroupSlice"
+import organizationReducer from "./Slices/OrganizationSlice"
 import registerReducer from "./Slices/RegisterSlice"
 import signUpReducer from "./Slices/SignUp"
 import userManagementReducer from "./Slices/UserManagementSlices"
@@ -23,11 +23,13 @@ import CompaniesReducer from "../Redux/Slices/CompaniesSlice"
 import reportingReducer from "../Redux/Slices/ReportingSlices"
 import taskReportReducer from "../Redux/Slices/TaskReportSlice"
 import systemLeaderReducer from "./Slices/SystemLeaderSlice"
-import chatReducer from "../components/Chat/ChatSlice"
+import chatReducer from "../components/Chat/chatSlice"
+import ProfileReducer from "../Redux/Slices/profileSlice"
+import authReducer from "../Redux/Slices/AuthSlice"
 const persistConfig = {
   key: "root",
   storage,
-  whitelist: ["login"], // Only persist the login slice
+  whitelist: ["login"], 
 }
 
 const rootReducer = combineReducers({
@@ -37,7 +39,7 @@ const rootReducer = combineReducers({
   manageUser: manageUserReducer,
   passwordResetRequest: passwordResetRequestReducer,
   confirmPasswordReset: confirmPasswordResetReducer,
-  group: groupReducer,
+  organisation: organizationReducer,
   register: registerReducer,
   signUp: signUpReducer,
   userManagement: userManagementReducer,
@@ -54,6 +56,9 @@ const rootReducer = combineReducers({
   taskReport: taskReportReducer,
   systemLeader: systemLeaderReducer,
   chat:chatReducer,
+  profile: ProfileReducer,
+  auth: authReducer
+
 })
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)

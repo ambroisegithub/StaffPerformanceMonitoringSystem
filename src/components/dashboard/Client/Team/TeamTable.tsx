@@ -1,8 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useState } from "react";
-import { useDispatch } from "react-redux";
 import {
   deleteTeam,
   setSelectedTeam as setSelectedTeamAction,
@@ -33,7 +32,9 @@ import {
 import { Dialog, DialogContent } from "../../../ui/dialog";
 import TeamDetailsModal from "./TeamDetail";
 import AssignMembersModal from "./AssignMembersModal";
-
+import type {  RootState } from "../../../../Redux/store"
+import { useDispatch, useSelector } from "react-redux"
+import { fetchUsers } from "../../../../Redux/Slices/ManageUserSlice"
 // Update the component to include state for the AssignMembersModal
 interface TeamTableProps {
   teams: Team[];
@@ -56,6 +57,14 @@ const TeamTable: React.FC<TeamTableProps> = ({
   const [deletingTeamId, setDeletingTeamId] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [isAssignMembersOpen, setIsAssignMembersOpen] = useState(false);
+  const { user: loggedInUser } = useSelector((state: RootState) => state.login);
+
+  const [activeTab, setActiveTab] = useState("levels");
+  useEffect(() => {
+    if (loggedInUser?.organization?.id) {
+      dispatch(fetchUsers(loggedInUser.organization.id));
+    }
+  }, [dispatch, loggedInUser]);
 
   const handleDelete = (team: Team) => {
     setTeamToDelete(team);
@@ -133,6 +142,8 @@ const TeamTable: React.FC<TeamTableProps> = ({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
+                                {loggedInUser?.role !== "overall" && (
+
                     <Button
                       variant="outline"
                       size="sm"
@@ -143,6 +154,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
                       <UserPlus className="h-4 w-4 text-green" />
                       <span className="sr-only">Assign Members</span>
                     </Button>
+)}
                     <Button
                       variant="outline"
                       size="sm"
@@ -153,6 +165,8 @@ const TeamTable: React.FC<TeamTableProps> = ({
                       <Eye className="h-4 w-4" />
                       <span className="sr-only">View Details</span>
                     </Button>
+                                {loggedInUser?.role !== "overall" && (
+
                     <Button
                       variant="outline"
                       size="sm"
@@ -168,6 +182,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
                       )}
                       <span className="sr-only">Delete</span>
                     </Button>
+                                )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -228,3 +243,4 @@ const TeamTable: React.FC<TeamTableProps> = ({
 };
 
 export default TeamTable;
+

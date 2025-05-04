@@ -18,7 +18,7 @@ import {
   getTaskStatusOverview, 
   getEmployeePerformance 
 } from '../../../Redux/Slices/SystemLeaderSlice';
-
+import Loader from '../../ui/Loader';
 import axios from 'axios';
 import ChatButton from "../../Chat/ChatButton"
 
@@ -30,6 +30,7 @@ const OverAllDashHomePage = () => {
   const [taskStatusData, setTaskStatusData] = useState([]);
   const [employeeData, setEmployeeData] = useState([]);
   const [employeeSummary, setEmployeeSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
   
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -65,9 +66,6 @@ const OverAllDashHomePage = () => {
       }
     };
 
-    checkAuthStatus();
-
-    // Fetch organization summary report
     const fetchSummaryReport = async () => {
       try {
         const result = await dispatch(fetchSummaryreportOfOrganization()).unwrap();
@@ -76,7 +74,6 @@ const OverAllDashHomePage = () => {
       }
     };
     
-    // Fetch task status overview
     const fetchTaskStatusOverview = async () => {
       try {
         const result = await dispatch(getTaskStatusOverview()).unwrap();
@@ -87,7 +84,6 @@ const OverAllDashHomePage = () => {
       }
     };
     
-    // Fetch employee performance data
     const fetchEmployeePerformance = async () => {
       try {
         const result = await dispatch(getEmployeePerformance()).unwrap();
@@ -103,14 +99,31 @@ const OverAllDashHomePage = () => {
       }
     };
 
-    fetchSummaryReport();
-    fetchTaskStatusOverview();
-    fetchEmployeePerformance();
+    const fetchData = async () => {
+      try {
+        setLoading(true); // Set loading to true before fetching data
+        await checkAuthStatus();
+        await fetchSummaryReport();
+        await fetchTaskStatusOverview();
+        await fetchEmployeePerformance();
+      } catch (error) {
+        // Handle errors if necessary
+      } finally {
+        setLoading(false); // Set loading to false after data is fetched
+      }
+    };
+
+    fetchData();
 
     const intervalId = setInterval(checkAuthStatus, 5 * 60 * 1000);
 
     return () => clearInterval(intervalId);
   }, [user, token, dispatch, navigate, apiUrl]);
+
+  if (loading) {
+    return <Loader />;
+    // Show loader while data is being fetched
+  }
 
   if (!user) {
     return null;
@@ -139,17 +152,7 @@ const OverAllDashHomePage = () => {
 
       {/* Time Range Filter */}
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Client Dashboard Overview</h1>
-        <select
-          value={timeRange}
-          onChange={(e) => setTimeRange(e.target.value)}
-          className="p-2 border rounded-lg w-full sm:w-auto bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-600"
-        >
-          <option value="day">Today</option>
-          <option value="week">This Week</option>
-          <option value="month">This Month</option>
-          <option value="year">This Year</option>
-        </select>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">OverAll Dashboard OverView</h1>
       </div>
 
       {/* Summary report Cards */}

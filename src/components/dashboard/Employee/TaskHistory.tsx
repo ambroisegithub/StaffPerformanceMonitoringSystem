@@ -118,7 +118,7 @@ const TaskHistory = () => {
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-wrap gap-4 p-6 bg-white rounded-lg shadow-md"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 bg-white">
           <FaFilter className="text-gray-500" />
           <select
             value={filter}

@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import React, { useState } from "react";
-import { LayoutDashboard, Building, PlusCircle, Eye, Trash2, ChevronDown, ChevronRight, X } from "lucide-react";
+import { LayoutDashboard, Building, PlusCircle, Eye, Trash2, ChevronDown, ChevronRight, X, User, Users } from "lucide-react";
 
 interface SidebarItem {
   id: string;
@@ -19,7 +19,7 @@ const sidebarItems: SidebarItem[] = [
   },
   {
     id: "create-organization",
-    title: "Create Organization",
+    title: "Create Client",
     icon: <PlusCircle className="h-5 w-5" />,
     path: "/system-leader/create-organization",
   },
@@ -28,6 +28,18 @@ const sidebarItems: SidebarItem[] = [
     title: "Change Account M.",
     icon: <PlusCircle className="h-5 w-5" />,
     path: "/system-leader/change-system-leader",
+  },
+  {
+    id: "Clients Profile",
+    title: "Clients Profile",
+    icon: <Users className="h-5 w-5" />,
+    path: "/system-leader/clients-profile",
+  },
+  {
+    id: "My Profile",
+    title: "My Profile",
+    icon: <User className="h-5 w-5" />,
+    path: "/system-leader/profile",
   },
 
 ];

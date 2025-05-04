@@ -7,6 +7,10 @@ import { useAppDispatch, useAppSelector } from "../../../Redux/hooks";
 import { logout } from "../../../Redux/Slices/LoginSlices";
 import { useNavigate } from "react-router-dom";
 import React from "react";
+import ChatButton from "../../Chat/ChatButton"; // Import ChatButton
+import { useSelector } from "react-redux";
+import { RootState } from "../../../Redux/store";
+
 interface Notification {
   id: string
   title: string
@@ -42,7 +46,9 @@ const SuperVisorDashboardNavbar = ({ toggleSidebar }: SuperVisorDashboardNavbarP
   ])
   const [showNotifications, setShowNotifications] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
-
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const profileData = useAppSelector((state) => state.profile.data)
+  const userInfo = useSelector((state: RootState) => state.login.user)
   const unreadCount = notifications.filter((n) => !n.read).length
 
   useEffect(() => {
@@ -58,6 +64,15 @@ const SuperVisorDashboardNavbar = ({ toggleSidebar }: SuperVisorDashboardNavbarP
     dispatch(logout());
     navigate("/login");
   };
+
+  useEffect(() => {
+    if (profileData?.profilePictureUrl) {
+      setPreviewUrl(profileData.profilePictureUrl)
+    } else if (userInfo?.profilePictureUrl) {
+      setPreviewUrl(userInfo.profilePictureUrl)
+    }
+  }, [profileData?.profilePictureUrl, userInfo?.profilePictureUrl])
+
 
   return (
     <nav className="px-4 py-3 flex items-center justify-between shadow-sm bg-white dark:bg-gray-800">
@@ -133,7 +148,8 @@ const SuperVisorDashboardNavbar = ({ toggleSidebar }: SuperVisorDashboardNavbarP
             {/* Profile */}
             <div className="relative">
               <button className="flex items-center space-x-2" onClick={() => setShowProfile(!showProfile)}>
-                <img src={ProfileImage || "/placeholder.svg"} alt="Profile" className="h-8 w-8 rounded-full" />
+                <img src={previewUrl|| ProfileImage} alt="Profile" className="h-8 w-8 rounded-full" />
+               
                 <span className="hidden md:block font-medium text-gray-900 dark:text-gray-100">{user?.username}</span>
                 <ChevronDown className="h-4 w-4 text-gray-500 dark:text-gray-400" />
               </button>
@@ -142,17 +158,13 @@ const SuperVisorDashboardNavbar = ({ toggleSidebar }: SuperVisorDashboardNavbarP
               {showProfile && (
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                   <div className="py-1">
+                  {/* /super-visor/profile */}
+                  
                     <a
-                      href="#profile"
+                      href="/super-visor/profile"
                       className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                       Your Profile
-                    </a>
-                    <a
-                      href="#settings"
-                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      Settings
                     </a>
                     <hr className="my-1 border-gray-200 dark:border-gray-700" />
                     <button
@@ -166,6 +178,9 @@ const SuperVisorDashboardNavbar = ({ toggleSidebar }: SuperVisorDashboardNavbarP
                 </div>
               )}
             </div>
+            {user?.id && user?.organization?.id ? (
+              <ChatButton userId={user.id} organizationId={user.organization.id} />
+            ) : null}
           </div>
     </nav>
   );

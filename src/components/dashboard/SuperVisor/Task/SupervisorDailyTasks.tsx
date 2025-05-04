@@ -21,6 +21,9 @@ import {
   FaTasks,
   FaAngleRight,
   FaAngleLeft,
+  FaComments,
+  FaUser,
+  FaTimes,
 } from "react-icons/fa"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../ui/table"
 import { Button } from "../../../ui/button"
@@ -30,6 +33,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../ui/Card"
 import { Input } from "../../../ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../ui/select"
 import ViewTaskModal from "./ViewTaskModal"
+
+interface Comment {
+  text: string
+  user_id: number
+  timestamp: string
+  user_name: string
+}
 
 interface Task {
   id: number
@@ -47,6 +57,7 @@ interface Task {
   review_status: string
   related_project: string
   achieved_deliverables: string
+  comments?: Comment[]
 }
 
 interface DailyTask {
@@ -59,6 +70,116 @@ interface DailyTask {
 interface SupervisorDailyTasksProps {
   dailyTask: DailyTask
   onSubmit: () => void
+}
+
+// Comments Modal Component
+const CommentsModal: React.FC<{
+  isOpen: boolean
+  onClose: () => void
+  comments: Comment[]
+  taskTitle: string
+}> = ({ isOpen, onClose, comments, taskTitle }) => {
+  if (!isOpen) return null
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp)
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-blue text-white px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <FaComments className="h-5 w-5" />
+            <div>
+              <h2 className="text-lg font-semibold">Task Comments</h2>
+              <p className="text-blue-100 text-sm truncate">{taskTitle}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white hover:text-blue-200 transition-colors p-1"
+          >
+            <FaTimes className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Comments Content */}
+        <div className="p-6 max-h-[60vh] overflow-y-auto">
+          {comments && comments.length > 0 ? (
+            <div className="space-y-4">
+              {comments.map((comment, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-gray-50 rounded-lg p-4 border-l-4 border-blue hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start space-x-3">
+                    <div className="bg-blue text-white p-2 rounded-full flex-shrink-0">
+                      <FaUser className="h-3 w-3" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-gray-900 truncate">
+                          {comment.user_name}
+                        </h4>
+                        <span className="text-xs text-gray-500 flex-shrink-0">
+                          {formatTimestamp(comment.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-gray-700 leading-relaxed">{comment.text}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="bg-gray-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <FaComments className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Comments Yet</h3>
+              <p className="text-gray-500">No comments have been added to this task.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-gray-50 px-6 py-4 border-t">
+          <div className="flex justify-between items-center text-sm text-gray-600">
+            <span>
+              {comments?.length || 0} comment{comments?.length !== 1 ? "s" : ""}
+            </span>
+            <Button onClick={onClose} variant="outline" size="sm">
+              Close
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
 }
 
 // Truncated content component with expandable functionality
@@ -126,6 +247,13 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // Comments functionality
+  const [selectedTaskComments, setSelectedTaskComments] = useState<{
+    comments: Comment[]
+    taskTitle: string
+  } | null>(null)
+  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
+
   const tasksPerPage = 5
 
   // Date calculations
@@ -180,7 +308,7 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
 
   const getButtonColor = () => {
     if (dailyTask.submitted) return "bg-green text-white cursor-not-allowed"
-    if (isPast) return "bg-red text-white cursor-not-allowed"
+    if (isPast) return "bg-[#FF8C00] text-white cursor-not-allowed"
     if (isFuture) return "bg-yellow text-white cursor-not-allowed"
     return "bg-green text-white hover:bg-green-600"
   }
@@ -189,6 +317,20 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
   const openTaskDetail = (task: Task) => {
     setSelectedTask(task)
     setIsDetailOpen(true)
+  }
+
+  // Comments functionality
+  const handleOpenComments = (task: Task) => {
+    setSelectedTaskComments({
+      comments: task.comments || [],
+      taskTitle: task.title,
+    })
+    setIsCommentsModalOpen(true)
+  }
+
+  const handleCloseComments = () => {
+    setIsCommentsModalOpen(false)
+    setSelectedTaskComments(null)
   }
 
   // Status counts for summary
@@ -303,7 +445,6 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                           <SelectItem value="all">All Statuses</SelectItem>
                           <SelectItem value="completed">Completed</SelectItem>
                           <SelectItem value="in_progress">In Progress</SelectItem>
-                          <SelectItem value="delayed">Delayed</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -321,7 +462,7 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                         <TableHead>Project</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Review</TableHead>
-                        <TableHead className="w-[80px]">Actions</TableHead>
+                        <TableHead className="w-[120px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -390,13 +531,41 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Button
-                                onClick={() => openTaskDetail(task)}
-                                size="sm"
-                                className="bg-blue text-white hover:bg-blue-600"
-                              >
-                                View
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  onClick={() => openTaskDetail(task)}
+                                  size="sm"
+                                  className="bg-blue text-white hover:bg-blue-600"
+                                >
+                                  View
+                                </Button>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        onClick={() => handleOpenComments(task)}
+                                        size="sm"
+                                        variant="outline"
+                                        className="relative border-gray-300 hover:border-blue hover:text-blue"
+                                      >
+                                        <FaComments className="h-4 w-4" />
+                                        {task.comments && task.comments.length > 0 && (
+                                          <span className="absolute -top-2 -right-2 bg-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                                            {task.comments.length}
+                                          </span>
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>
+                                        {task.comments && task.comments.length > 0
+                                          ? `${task.comments.length} comment${task.comments.length !== 1 ? 's' : ''}`
+                                          : 'No comments'}
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -498,6 +667,14 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
 
       {/* Task Detail Modal */}
       <ViewTaskModal task={selectedTask} isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} />
+
+      {/* Comments Modal */}
+      <CommentsModal
+        isOpen={isCommentsModalOpen}
+        onClose={handleCloseComments}
+        comments={selectedTaskComments?.comments || []}
+        taskTitle={selectedTaskComments?.taskTitle || ""}
+      />
     </motion.div>
   )
 }
