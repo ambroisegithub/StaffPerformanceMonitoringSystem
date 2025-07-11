@@ -1,5 +1,4 @@
 // @ts-nocheck
-
 "use client"
 
 import React from "react"
@@ -16,12 +15,13 @@ import {
   FaCheckCircle,
   FaClock,
   FaPaperclip,
+  FaExchangeAlt,
+  FaRedo,
 } from "react-icons/fa"
 import { useAppSelector } from "../../../Redux/hooks"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import FileUpload from "./FileUpload"
 
-// Task status enum matching the backend
 enum TaskStatus {
   IN_PROGRESS = "in_progress",
   COMPLETED = "completed",
@@ -35,7 +35,6 @@ interface TaskModalProps {
   initialData?: any
 }
 
-// Helper function to get status icon
 const getStatusIcon = (status: string) => {
   switch (status) {
     case TaskStatus.COMPLETED:
@@ -54,10 +53,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
   const [formProgress, setFormProgress] = useState(0)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
-  // Get today's date in YYYY-MM-DD format for the date input
   const today = new Date().toISOString().split("T")[0]
-
-  // Determine if company field should be shown
   const showCompanyField = user?.company !== null
 
   const [taskData, setTaskData] = useState({
@@ -75,17 +71,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
     status: TaskStatus.IN_PROGRESS,
   })
 
-  // Initialize form data when modal opens or mode changes
   useEffect(() => {
     if (isOpen) {
       if (mode === "rework" && initialData) {
-        // Pre-populate form with existing task data for rework
         setTaskData({
           title: initialData.title || "",
           description: initialData.description || "",
           company_served: initialData.company_served?.name || (showCompanyField ? user?.company?.name || "" : ""),
           contribution: initialData.contribution || "",
-          due_date: today, // Always use today's date
+          due_date: today,
           latitude: initialData.latitude || 0,
           longitude: initialData.longitude || 0,
           location_name: initialData.location_name || "",
@@ -94,9 +88,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
           created_by: initialData.created_by || user?.id || 0,
           status: initialData.status || TaskStatus.IN_PROGRESS,
         })
-        setSelectedFiles([]) // Reset files for rework
+        setSelectedFiles([])
       } else {
-        // Reset form for new task creation
         setTaskData({
           title: "",
           description: "",
@@ -117,7 +110,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
   }, [isOpen, mode, initialData, showCompanyField, user, today])
 
   useEffect(() => {
-    // Calculate form progress based on required fields only
     const requiredFields = [
       "title",
       "description",
@@ -127,7 +119,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
       "achieved_deliverables",
     ]
 
-    // Add company_served to required fields only if it should be shown
     if (showCompanyField) {
       requiredFields.push("company_served")
     }
@@ -144,18 +135,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
     setTaskData((prev) => ({ ...prev, [name]: value }))
   }
 
-  // Special handler for due_date to ensure it's always today
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Force the value to be today's date regardless of what was selected
     setTaskData((prev) => ({ ...prev, due_date: today }))
   }
 
-  // Handle status change from select component
   const handleStatusChange = (value: string) => {
     setTaskData((prev) => ({ ...prev, status: value }))
   }
 
-  // Handle file selection
   const handleFilesChange = (files: File[]) => {
     setSelectedFiles(files)
   }
@@ -166,7 +153,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
 
     setIsSubmitting(true)
     try {
-      // Prepare submission data
       const submissionData = {
         ...taskData,
         attached_documents: selectedFiles.length > 0 ? selectedFiles : undefined,
@@ -174,7 +160,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
 
       await onSubmit(submissionData)
 
-      // Reset form after successful submission
       setTaskData({
         title: "",
         description: "",
@@ -199,11 +184,17 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
   }
 
   const getModalTitle = () => {
-    return mode === "rework" ? "Rework Task" : "Add New Task"
+    if (mode === "rework") {
+      return initialData?.isShifted ? "Continue Shifted Task" : "Rework Task"
+    }
+    return "Add New Task"
   }
 
   const getSubmitButtonText = () => {
     if (mode === "rework") {
+      if (initialData?.isShifted) {
+        return isReworking ? "Continuing..." : "Continue Task"
+      }
       return isReworking ? "Reworking..." : "Resubmit Task"
     }
     return isSubmitting ? "Adding Task..." : "Add Task"
@@ -254,6 +245,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
               </div>
               <p className="text-sm text-gray-600 mt-2">Form Completion: {formProgress.toFixed(0)}%</p>
             </div>
+
+            {mode === "rework" && initialData?.isShifted && (
+              <div className="mb-4 p-3 bg-orange-50 rounded-md border border-orange-100">
+                <div className="flex items-center text-orange-700">
+                  <FaExchangeAlt className="mr-2" />
+                  <span>This is a shifted task from {initialData.originalDueDate?.split('T')[0] || 'a previous day'}</span>
+                </div>
+              </div>
+            )}
+
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div

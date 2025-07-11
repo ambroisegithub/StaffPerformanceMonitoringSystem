@@ -48,6 +48,7 @@ import ClientsProfilePage from "../components/dashboard/system-leader/ClientsPro
 import UserTaskReport from "../components/dashboard/Overall/Report/UserTaskReport";
 import UserReportSelection from "../components/dashboard/Overall/Report/UserReportSelection";
 import UserReportSelection1 from "../components/dashboard/Client/UserReportSelection";
+import ManageTaskType from "../components/dashboard/Client/Tasks/ManageTaskType";
 
 const AppRoutes: FunctionComponent = () => {
   return (
@@ -97,6 +98,14 @@ const AppRoutes: FunctionComponent = () => {
             </ProtectedRoute>
           }
         />
+              <Route
+        path="/admin/manage-task-types"
+        element={
+          <ProtectedRoute roles={["client"]}>
+            <ManageTaskType />
+          </ProtectedRoute>
+        }
+      />
           <Route
             path="/admin/user/:userId/report"
             element={

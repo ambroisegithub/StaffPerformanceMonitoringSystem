@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
 import axios from "axios"
 import { showErrorToast, showSuccessToast } from "../../utilis/ToastProps"
-import { RootState } from "../store"
+import type { RootState } from "../store"
 
 interface Task {
   id: number
@@ -29,7 +29,13 @@ interface Task {
   }
   reviewed?: boolean
   review_status?: string
+  workDaysCount?: number
+  originalDueDate?: string
+  lastShiftedDate?: string
+  isShifted?: boolean
+  canEdit?: boolean
 }
+
 
 interface DailyTask {
   id: number
@@ -49,6 +55,7 @@ interface DailyTask {
   updated_at?: string
 }
 
+
 interface TaskState {
   tasks: Task[]
   dailyTasks: DailyTask[]
@@ -57,8 +64,14 @@ interface TaskState {
   isReworking: boolean
   reworkError: string | null
   uploadProgress: number
+  isShifting: boolean
+  shiftError: string | null
+  lastShiftResult: {
+    tasksShifted: number
+    shiftDate: string
+    tasks: any[]
+  } | null
 }
-
 const initialState: TaskState = {
   tasks: [],
   dailyTasks: [],
@@ -67,6 +80,9 @@ const initialState: TaskState = {
   isReworking: false,
   reworkError: null,
   uploadProgress: 0,
+  isShifting: false,
+  shiftError: null,
+  lastShiftResult: null,
 }
 
 const apiUrl = `${import.meta.env.VITE_BASE_URL}/task`
@@ -124,71 +140,157 @@ export const createTask = createAsyncThunk("tasks/createTask", async (taskData: 
   }
 })
 
-// New rework task action
+// Enhanced rework task action for both rejected and shifted tasks
 export const reworkTask = createAsyncThunk(
   "tasks/reworkTask",
-  async ({ taskId, formData }: { taskId: number; formData: FormData }, { rejectWithValue }) => {
+  async ({ taskId, formData }: { taskId: number; formData: FormData }, { rejectWithValue, getState }) => {
     try {
       const token = localStorage.getItem("token")
+      const state = getState() as RootState
+      const isShifted = formData.get('isShifted') === 'true'
+
+      // Add headers for shifted tasks
+      if (isShifted) {
+        formData.append('shiftedRework', 'true')
+      }
 
       const response = await axios.put(`${apiUrl}/tasks/${taskId}/rework`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          // Don't set Content-Type, let browser handle it for FormData
         },
       })
 
-      showSuccessToast("Task reworked successfully!")
-      return response.data
+      showSuccessToast(
+        isShifted 
+          ? "Shifted task continued successfully!" 
+          : "Task reworked successfully!"
+      )
+      
+      return {
+        ...response.data,
+        isShiftedRework: isShifted
+      }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Failed to rework task"
+      showErrorToast(errorMessage)
+      return rejectWithValue(errorMessage)
+    }
+  }
+)
+
+
+
+// In the extraReducers:
+
+
+// ORIGINAL: Keep updateTask function for TaskDetailsModal
+export const updateTask = createAsyncThunk(
+  "tasks/updateTask",
+  async ({ taskId, taskData }: { taskId: number; taskData: any }, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await axios.put(`${apiUrl}/tasks/${taskId}`, taskData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+      showSuccessToast("Task updated successfully!")
+      return response.data
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || "Failed to update task"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
     }
   },
 )
 
+// ORIGINAL: Keep updateTaskStatus function for TaskDetailsModal
+export const updateTaskStatus = createAsyncThunk(
+  "tasks/updateTaskStatus",
+  async ({ taskId, status }: { taskId: number; status: string }, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await axios.patch(
+        `${apiUrl}/tasks/${taskId}/status`,
+        { status },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      )
+      showSuccessToast("Task status updated successfully!")
+      return response.data
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || "Failed to update task status"
+      showErrorToast(errorMessage)
+      return rejectWithValue(errorMessage)
+    }
+  },
+)
 
 export const fetchDailyTasks = createAsyncThunk(
   "tasks/fetchDailyTasks",
-  async (userId: number, { rejectWithValue,getState }) => {
+  async (userId: number, { rejectWithValue, getState }) => {
     try {
+      console.log("📋 [FRONTEND] Fetching daily tasks for user:", userId)
       const state = getState() as RootState
       const organizationId = state.login.user?.organization?.id
-      const token = localStorage.getItem("token") // Get token from local storage
-      // http://localhost:3002/api/v1/organizations/organization/11/teams/daily-tasks
+      const token = localStorage.getItem("token")
+
+      console.log("🏢 [FRONTEND] Organization ID:", organizationId)
+
+      // Auto-shifting happens automatically in the backend when fetching daily tasks
       const response = await axios.get(`${apiUrl}/user/${userId}/daily-tasks`, {
         headers: {
-          Authorization: `Bearer ${token}`, // Include token in headers
+          Authorization: `Bearer ${token}`,
         },
       })
-      // Ensure we're returning an array even if the API returns null or undefined
-      return response.data.data || []
+
+      console.log("✅ [FRONTEND] Daily tasks fetched successfully")
+      
+      // Filter out empty task groups while ensuring we return an array
+      const rawData = response.data.data || []
+      const filteredData = rawData.filter((dailyTask: any) => {
+        // Keep only daily tasks that have at least one task
+        return dailyTask.tasks && dailyTask.tasks.length > 0
+      })
+      
+      console.log(`🔍 [FRONTEND] Filtered ${rawData.length - filteredData.length} empty task groups`)
+      
+      return filteredData
     } catch (error: any) {
+      console.error("❌ [FRONTEND] Failed to fetch daily tasks:", error)
       const errorMessage = error.response?.data?.message || "Failed to fetch daily tasks"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
     }
   },
 )
-
 export const submitDailyTasks = createAsyncThunk(
   "tasks/submitDailyTasks",
   async ({ userId, dailyTaskId }: { userId: number; dailyTaskId: number }, { rejectWithValue }) => {
     try {
-    const token = localStorage.getItem("token") 
+      console.log("📤 [FRONTEND] Submitting daily tasks:", { userId, dailyTaskId })
+      const token = localStorage.getItem("token")
+
       const response = await axios.post(
         `${apiUrl}/daily-tasks/${dailyTaskId}/submit`,
         { userId },
         {
           headers: {
-            Authorization: `Bearer ${token}`, 
+            Authorization: `Bearer ${token}`,
           },
         },
       )
+
+      console.log("✅ [FRONTEND] Daily tasks submitted successfully")
       showSuccessToast("Daily tasks submitted successfully!")
       return response.data.data || response.data
     } catch (error: any) {
+      console.error("❌ [FRONTEND] Failed to submit daily tasks:", error)
       const errorMessage = error.response?.data?.message || "Failed to submit daily tasks"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
@@ -203,12 +305,17 @@ const taskSlice = createSlice({
     clearTaskErrors: (state) => {
       state.error = null
       state.reworkError = null
+      state.shiftError = null
     },
     setUploadProgress: (state, action) => {
       state.uploadProgress = action.payload
     },
     resetUploadProgress: (state) => {
       state.uploadProgress = 0
+    },
+    // ENHANCEMENT: Add shift result clearing
+    clearShiftResult: (state) => {
+      state.lastShiftResult = null
     },
   },
   extraReducers: (builder) => {
@@ -233,13 +340,13 @@ const taskSlice = createSlice({
         state.uploadProgress = 0
       })
 
-      // Rework Task
-      .addCase(reworkTask.pending, (state) => {
-        state.isReworking = true
-        state.reworkError = null
+      // Update Task
+      .addCase(updateTask.pending, (state) => {
+        state.loading = true
+        state.error = null
       })
-      .addCase(reworkTask.fulfilled, (state, action) => {
-        state.isReworking = false
+      .addCase(updateTask.fulfilled, (state, action) => {
+        state.loading = false
         // Update the task in the daily tasks
         if (action.payload && action.payload.task) {
           const updatedTask = action.payload.task
@@ -248,15 +355,72 @@ const taskSlice = createSlice({
             tasks: dailyTask.tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)),
           }))
         }
-        state.uploadProgress = 0
       })
+      .addCase(updateTask.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
+
+      // Update Task Status
+      .addCase(updateTaskStatus.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(updateTaskStatus.fulfilled, (state, action) => {
+        state.loading = false
+        // Update the task status in the daily tasks
+        if (action.payload && action.payload.task) {
+          const updatedTask = action.payload.task
+          state.dailyTasks = state.dailyTasks.map((dailyTask) => ({
+            ...dailyTask,
+            tasks: dailyTask.tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)),
+          }))
+        }
+      })
+      .addCase(updateTaskStatus.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
+
+      // Rework Task
+      .addCase(reworkTask.pending, (state) => {
+        state.isReworking = true
+        state.reworkError = null
+      })
+
+// In the extraReducers section, update the reworkTask.fulfilled case:
+.addCase(reworkTask.fulfilled, (state, action) => {
+  state.isReworking = false
+  if (action.payload && action.payload.task) {
+    const updatedTask = action.payload.task
+    state.dailyTasks = state.dailyTasks.map((dailyTask) => ({
+      ...dailyTask,
+      tasks: dailyTask.tasks.map((task) => 
+        task.id === updatedTask.id ? { 
+          ...updatedTask,
+          // Ensure we preserve the status from the response
+          status: updatedTask.status,
+          review_status: updatedTask.review_status,
+          // Preserve shift-related fields if they exist
+          originalDueDate: updatedTask.originalDueDate || task.originalDueDate,
+          isShifted: updatedTask.isShifted || false,
+          lastShiftedDate: updatedTask.lastShiftedDate || null,
+          workDaysCount: updatedTask.workDaysCount || task.workDaysCount,
+        } : task
+      ),
+    }))
+  }
+  state.uploadProgress = 0
+})
+  
+
       .addCase(reworkTask.rejected, (state, action) => {
         state.isReworking = false
         state.reworkError = action.payload as string
         state.uploadProgress = 0
       })
 
-      // Fetch Daily Tasks
+      // Fetch Daily Tasks (with auto-shifting)
       .addCase(fetchDailyTasks.pending, (state) => {
         state.loading = true
         state.error = null
@@ -291,5 +455,5 @@ const taskSlice = createSlice({
   },
 })
 
-export const { clearTaskErrors, setUploadProgress, resetUploadProgress } = taskSlice.actions
+export const { clearTaskErrors, setUploadProgress, resetUploadProgress, clearShiftResult } = taskSlice.actions
 export default taskSlice.reducer

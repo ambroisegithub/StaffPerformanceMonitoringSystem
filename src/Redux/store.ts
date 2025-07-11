@@ -26,6 +26,7 @@ import systemLeaderReducer from "./Slices/SystemLeaderSlice"
 import chatReducer from "../components/Chat/chatSlice"
 import ProfileReducer from "../Redux/Slices/profileSlice"
 import authReducer from "../Redux/Slices/AuthSlice"
+import taskTypesReducer from "../Redux/Slices/TaskTypeSlices"
 const persistConfig = {
   key: "root",
   storage,
@@ -57,7 +58,8 @@ const rootReducer = combineReducers({
   systemLeader: systemLeaderReducer,
   chat:chatReducer,
   profile: ProfileReducer,
-  auth: authReducer
+  auth: authReducer,
+  taskTypes:taskTypesReducer
 
 })
 

@@ -1,10 +1,9 @@
 // @ts-nocheck
-
 "use client"
 
 import React from "react"
 import { useEffect, useRef, useState } from "react"
-import { useAppSelector } from "../../Redux/hooks"
+import { useAppSelector, useAppDispatch } from "../../Redux/hooks"
 import {
   Check,
   CheckCheck,
@@ -17,10 +16,12 @@ import {
   MessageSquare,
   Loader,
   Briefcase,
+  X,
 } from "lucide-react"
 import type { Message } from "./chatSlice"
 import EmojiPicker from "emoji-picker-react"
 import { showErrorToast, showSuccessToast } from "../../utilis/ToastProps"
+import { setReplyingTo, clearReplyingTo } from "./chatSlice"
 
 interface TaskChatContext {
   taskId: number
@@ -36,7 +37,6 @@ interface ChatMessagesProps {
   currentUserId: number
   onPinMessage: (messageId: number) => void
   taskContext: TaskChatContext | null
-  // Additional props for auto-conversation creation when no conversationId
   users?: any[]
   dispatch?: any
   currentUser?: any
@@ -51,7 +51,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   dispatch,
   currentUser,
 }) => {
-  const { messages = [], typingUsers = {}, messagesLoading } = useAppSelector((state) => state.chat) || {}
+  const { messages = [], typingUsers = {}, messagesLoading, replyingTo } = useAppSelector((state) => state.chat) || {}
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [selectedMessage, setSelectedMessage] = useState<number | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState<number | null>(null)
@@ -59,6 +59,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   const [userReactions, setUserReactions] = useState<Record<number, string>>({})
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
+  const dispatchRedux = useAppDispatch()
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -92,22 +93,19 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     setIsCreatingConversation(true)
 
     try {
-      // Find receiver information from users list or task context
       const receiverFromUsers = users.find((user) => user.id === taskContext?.userId)
       const receiverInfo = receiverFromUsers || {
         id: taskContext?.userId,
         name: taskContext?.userName,
-        email: "", // Default empty email
+        email: "",
       }
 
       console.log("ChatMessages: Auto-creating conversation for task:", taskContext?.taskTitle)
       console.log("ChatMessages: Receiver Info::", receiverInfo)
 
-      // Import socket services - same as ChatInput
       const { createConversation, joinConversation } = await import("../../services/socketService")
       const { selectConversation, addNewConversation, fetchMessages } = await import("./chatSlice")
 
-      // Create the conversation with proper payload
       const createPayload = {
         senderId: currentUser?.id,
         receiverId: taskContext?.userId,
@@ -120,8 +118,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
       const result = await createConversation(
         taskContext?.userId,
-        undefined, // No initial message
-        undefined, // No daily task
+        undefined,
+        undefined,
         `Task: ${taskContext?.taskTitle}`,
         taskContext?.taskId,
         taskContext?.taskTitle,
@@ -132,12 +130,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       if (result && result.conversationId) {
         console.log("ChatMessages: Conversation created successfully:", result.conversationId)
 
-        // Add conversation to Redux store immediately with proper receiver info
         dispatch(
           addNewConversation({
             conversationId: result.conversationId,
             sender: result.sender || { id: currentUser?.id, name: currentUser?.name || "You" },
-            receiver: receiverInfo, // Use the receiver info we found
+            receiver: receiverInfo,
             task: {
               id: taskContext?.taskId,
               title: taskContext?.taskTitle,
@@ -147,19 +144,15 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
         console.log(`ChatMessages: Added new conversation to Redux: ${result.conversationId}`)
 
-        // Select the conversation in Redux
         dispatch(selectConversation(result.conversationId))
 
         try {
-          // Join the conversation first
           console.log("ChatMessages: Joining conversation:", result.conversationId)
           await joinConversation(result.conversationId)
           console.log("ChatMessages: Successfully joined conversation")
 
-          // Small delay to ensure join is processed
           await new Promise((resolve) => setTimeout(resolve, 500))
 
-          // Fetch messages to update the UI (will be empty initially)
           dispatch(fetchMessages({ conversationId: result.conversationId, userId: currentUserId }))
 
           showSuccessToast(`Ready to chat about task: ${taskContext?.taskTitle}`)
@@ -243,11 +236,23 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     )
   }
 
+  const handleReplyToMessage = (message: Message) => {
+    dispatchRedux(setReplyingTo({
+      id: message.id,
+      content: message.content,
+      sender: message.sender,
+    }))
+    // Scroll to input field
+    setTimeout(() => {
+      document.getElementById("chat-input")?.scrollIntoView({ behavior: "smooth" })
+    }, 100)
+  }
+
   const renderMessageActions = (message: Message) => {
     if (selectedMessage !== message.id) return null
 
     return (
-      <div className="absolute -top-8 right-0 flex items-center space-x-1 bg-white dark:bg-gray-800 rounded-lg shadow-md p-1 border border-gray-200 dark:border-gray-700">
+      <div className="absolute flex items-center justify-center  bottom-0 bg-white dark:bg-gray-800 rounded-lg shadow-md  border border-gray-200 dark:border-gray-700">
         <button
           className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
           onClick={() => setShowEmojiPicker(message.id)}
@@ -257,12 +262,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         </button>
         <button
           className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-          onClick={() => {
-            /* Reply to message */
-          }}
+          onClick={() => handleReplyToMessage(message)}
           aria-label="Reply"
         >
-          <Reply size={16} />
+          <Reply size={16} color="#111827" />
         </button>
         <button
           className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
@@ -271,15 +274,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         >
           <Pin size={16} />
         </button>
-        <button
-          className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-          onClick={() => {
-            /* Forward message */
-          }}
-          aria-label="Forward"
-        >
-          <Forward size={16} />
-        </button>
+
         <button
           className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
           onClick={() => {
@@ -310,6 +305,28 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         <Briefcase size={14} className="mr-1.5" />
         <span>Task: {message.taskTitle || taskContext?.taskTitle || "Unknown Task"}</span>
         {message.taskId && <span className="text-xs ml-2 opacity-75">(#{message.taskId})</span>}
+      </div>
+    )
+  }
+
+  const renderReplyIndicator = () => {
+    if (!replyingTo) return null
+
+    return (
+      <div className="bg-gray-100 dark:bg-gray-700 p-2 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between">
+        <div className="flex items-center">
+          <Reply size={14} className="text-gray-500 dark:text-gray-400 mr-2" />
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            <span className="font-medium">Replying to {replyingTo.sender.id === currentUserId ? "yourself" : replyingTo.sender.name}</span>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{replyingTo.content}</p>
+          </div>
+        </div>
+        <button
+          onClick={() => dispatchRedux(clearReplyingTo())}
+          className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+        >
+          <X size={14} />
+        </button>
       </div>
     )
   }
@@ -539,6 +556,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           </div>
         </div>
       )}
+
+      {renderReplyIndicator()}
 
       {groupedMessages.length > 0 ? (
         <div className="flex flex-col">

@@ -113,6 +113,14 @@ interface ChatState {
   theme: "light" | "dark"
   wallpaper: string
   fontSize: "small" | "medium" | "large"
+    replyingTo: {
+    id: number
+    content: string
+    sender: {
+      id: number
+      name: string
+    }
+  } | null
 }
 
 const initialState: ChatState = {
@@ -135,6 +143,7 @@ const initialState: ChatState = {
   theme: "light",
   wallpaper: "default",
   fontSize: "medium",
+  replyingTo: null,
 }
 
 // Async thunks
@@ -336,6 +345,19 @@ const chatSlice = createSlice({
       state.selectedConversation = action.payload
       // Clear typing indicator when changing conversations
       state.typingUsers = {}
+    },
+    setReplyingTo: (state, action: PayloadAction<{
+      id: number
+      content: string
+      sender: {
+        id: number
+        name: string
+      }
+    }>) => {
+      state.replyingTo = action.payload
+    },
+    clearReplyingTo: (state) => {
+      state.replyingTo = null
     },
     // In your chatSlice.ts
     receiveMessage: (state, action: PayloadAction<Message>) => {
@@ -646,6 +668,8 @@ export const {
   setTheme,
   setWallpaper,
   setFontSize,
+  setReplyingTo,
+  clearReplyingTo
 } = chatSlice.actions
 
 export default chatSlice.reducer

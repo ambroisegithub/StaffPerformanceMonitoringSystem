@@ -96,6 +96,7 @@ const sidebarItems = [
     subItems: [
       { id: 'Manage Teams Tasks', title: 'Review Tasks', path: '/admin/teams-tasks-admin' },
       { id: 'Create Task', title: 'Create Task', path: '/admin/tasks/create' },
+       { id: 'Manage Task Type', title: 'Manage Task Type', path: 'admin/manage-task-types' },
     ]
   },
       {

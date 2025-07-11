@@ -8,6 +8,8 @@ import {
   setUserOnline,
   setUserOffline,
   addNewConversation,
+  setReplyingTo,
+  clearReplyingTo,
 } from "../components/Chat/chatSlice"
 import { showErrorToast } from "../utilis/ToastProps"
 
@@ -78,6 +80,7 @@ export const sendMessage = (
   taskId?: number | null,
   taskTitle?: string | null,
   taskDescription?: string | null,
+  replyToMessageId?: number | null
 ) => {
   return new Promise((resolve, reject) => {
     if (!socket.connected) {
@@ -116,6 +119,7 @@ export const sendMessage = (
           taskId: taskId || undefined,
           taskTitle: taskTitle || undefined,
           taskDescription: taskDescription || undefined,
+          replyToMessageId: replyToMessageId || undefined,
         }
 
         console.log("Sending message payload:", messagePayload)
@@ -145,8 +149,16 @@ export const sendMessage = (
                       description: taskDescription || "",
                     }
                   : null,
+                reply_to: replyToMessageId
+                  ? {
+                      id: replyToMessageId,
+                      content: store.getState().chat.replyingTo?.content || "",
+                    }
+                  : undefined,
               }),
             )
+            // Clear the reply after sending
+            store.dispatch(clearReplyingTo())
             resolve(response)
           } else {
             console.error("Message send failed:", response?.error || "Unknown error")
@@ -227,7 +239,6 @@ const setupSocketListeners = () => {
   })
 }
 
-// Reply to a message
 export const replyToMessage = (
   conversationId: string,
   receiverId: number,

@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use client"
+
 import React from "react"
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -29,6 +30,8 @@ import {
   FaImage,
   FaVideo,
   FaMusic,
+  FaExchangeAlt, 
+  FaHistory,
 } from "react-icons/fa"
 import { MessageSquare } from "lucide-react"
 import { useAppSelector, useAppDispatch } from "../../../Redux/hooks"
@@ -85,6 +88,12 @@ interface Task {
   achieved_deliverables: string
   comments?: Comment[]
   attached_documents?: AttachedDocument[]
+  // ENHANCEMENT: Add work tracking fields
+  workDaysCount?: number
+  originalDueDate?: string
+  lastShiftedDate?: string
+  isShifted?: boolean
+  canEdit?: boolean
 }
 
 interface DailyTask {
@@ -126,8 +135,8 @@ const CommentsModal: React.FC<{
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={onClose}
@@ -385,6 +394,11 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
 
   const tasksPerPage = 5
 
+  // Early return if no tasks (safety check)
+  if (!dailyTask.tasks || dailyTask.tasks.length === 0) {
+    return null
+  }
+
   // Date calculations
   const today = new Date().toISOString().split("T")[0]
 
@@ -397,6 +411,9 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
   const isToday = submissionDateStr === today
   const isPast = isNaN(submissionDate.getTime()) ? false : submissionDate < new Date(today)
   const isFuture = isNaN(submissionDate.getTime()) ? false : submissionDate > new Date(today)
+
+  // Check if any tasks are in progress
+  const hasInProgressTasks = dailyTask.tasks.some(task => task.status === "in_progress")
 
   // Chat functionality similar to TaskList
   const handleOpenTaskChat = (task: Task, userId?: number, userName?: string) => {
@@ -485,6 +502,13 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
 
   const handleSubmit = async () => {
     if (!user) return
+    
+    // Check if there are any in-progress tasks
+    if (hasInProgressTasks) {
+      alert("Please complete all tasks before submitting. You have tasks that are still in progress.")
+      return
+    }
+    
     setIsSubmitting(true)
     try {
       await dispatch(
@@ -503,6 +527,7 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
     if (dailyTask.submitted) return "Submitted"
     if (isPast) return "Cannot Submit Past Tasks"
     if (isFuture) return "Cannot Submit Future Tasks"
+    if (hasInProgressTasks) return "Complete All Tasks To Submit"
     return "Submit Daily Tasks"
   }
 
@@ -510,6 +535,7 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
     if (dailyTask.submitted) return "bg-green text-white cursor-not-allowed"
     if (isPast) return "bg-red text-white cursor-not-allowed"
     if (isFuture) return "bg-yellow text-white cursor-not-allowed"
+    if (hasInProgressTasks) return "bg-orange-500 text-white cursor-not-allowed"
     return "bg-green text-white hover:bg-green-600"
   }
 
@@ -528,6 +554,11 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
       },
       {} as Record<string, number>,
     )
+  }, [dailyTask.tasks])
+
+  // ENHANCEMENT: Count shifted tasks
+  const shiftedTasksCount = useMemo(() => {
+    return dailyTask.tasks.filter((task) => task.isShifted).length
   }, [dailyTask.tasks])
 
   return (
@@ -570,6 +601,12 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                 {statusCounts.delayed && (
                   <Badge variant="outline" className="bg-red/10 text-red border-red">
                     <FaExclamationCircle className="mr-1" /> {statusCounts.delayed} Delayed
+                  </Badge>
+                )}
+                {/* ENHANCEMENT: Show shifted tasks count */}
+                {shiftedTasksCount > 0 && (
+                  <Badge variant="outline" className="bg-orange/10 text-orange border-orange">
+                    <FaExchangeAlt className="mr-1" /> {shiftedTasksCount} Shifted
                   </Badge>
                 )}
                 {dailyTask.submitted && (
@@ -648,6 +685,8 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                         <TableHead>Project</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Review</TableHead>
+                        {/* ENHANCEMENT: Add Work Days column */}
+                        <TableHead>Work Days</TableHead>
                         <TableHead className="w-[220px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -660,7 +699,28 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                             </TableCell>
                             <TableCell>
                               <div className="space-y-1">
-                                <p className="font-semibold">{task.title}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold">{task.title}</p>
+                                  {/* ENHANCEMENT: Show shift indicator */}
+                                  {task.isShifted && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge variant="outline" className="bg-orange/10 text-orange border-orange">
+                                            <FaExchangeAlt className="mr-1 h-3 w-3" />
+                                            Shifted
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>This task was shifted from a previous day</p>
+                                          {task.originalDueDate && (
+                                            <p>Original date: {new Date(task.originalDueDate).toLocaleDateString()}</p>
+                                          )}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
                                 <TruncatedContent content={task.description} maxLength={50} />
                                 {/* Display attached documents */}
                                 <DocumentDisplay documents={task.attached_documents || []} />
@@ -719,6 +779,25 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                                 )
                               })()}
                             </TableCell>
+                            {/* ENHANCEMENT: Work Days column */}
+                            <TableCell>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="bg-purple/10 text-purple border-purple">
+                                      <FaHistory className="mr-1 h-3 w-3" />
+                                      {task.workDaysCount || 0} day{(task.workDaysCount || 0) !== 1 ? "s" : ""}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Days worked on this task</p>
+                                    {task.originalDueDate && task.originalDueDate !== task.due_date && (
+                                      <p>Original date: {new Date(task.originalDueDate).toLocaleDateString()}</p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Button
@@ -729,8 +808,8 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                                   View
                                 </Button>
 
-                                {/* Conditional Rework Button */}
-                                {task.review_status === ReviewStatus.REJECTED && (
+                                {/* ENHANCEMENT: Conditional Rework Button for both rejected AND shifted tasks */}
+                                {(task.review_status === ReviewStatus.REJECTED || task.isShifted) && (
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
@@ -747,7 +826,10 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>Rework this rejected task</p>
+                                        <p>
+                                          Rework this{" "}
+                                          {task.review_status === ReviewStatus.REJECTED ? "rejected" : "shifted"} task
+                                        </p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -777,6 +859,7 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
+
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -814,7 +897,7 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-4 text-gray-500">
+                          <TableCell colSpan={8} className="text-center py-4 text-gray-500">
                             No tasks found matching your criteria
                           </TableCell>
                         </TableRow>
@@ -851,7 +934,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                             pageNum = totalPages - 4 + i
                           }
                         }
-
                         if (pageNum <= totalPages) {
                           return (
                             <Button
@@ -884,7 +966,7 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                 <div className="mt-6 flex justify-end">
                   <Button
                     onClick={handleSubmit}
-                    disabled={!isToday || dailyTask.submitted || isPast || isFuture || isSubmitting}
+                    disabled={!isToday || dailyTask.submitted || isPast || isFuture || isSubmitting || hasInProgressTasks}
                     className={`${getButtonColor()} transition-colors duration-300`}
                   >
                     {isSubmitting ? (
@@ -907,9 +989,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
           )}
         </AnimatePresence>
       </Card>
-
-      {/* Task Detail Modal */}
-      <ViewTaskModal task={selectedTask} isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} />
 
       {/* Comments Modal */}
       <CommentsModal
