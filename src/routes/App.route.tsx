@@ -98,14 +98,7 @@ const AppRoutes: FunctionComponent = () => {
             </ProtectedRoute>
           }
         />
-              <Route
-        path="/admin/manage-task-types"
-        element={
-          <ProtectedRoute roles={["client"]}>
-            <ManageTaskType />
-          </ProtectedRoute>
-        }
-      />
+
           <Route
             path="/admin/user/:userId/report"
             element={
@@ -136,6 +129,14 @@ const AppRoutes: FunctionComponent = () => {
               </ProtectedRoute>
             }
           />
+                  <Route
+        path="/admin/manage-task-types"
+        element={
+          <ProtectedRoute roles={["client"]}>
+            <ManageTaskType />
+          </ProtectedRoute>
+        }
+      />
           <Route
             path="/admin/manage-position"
             element={

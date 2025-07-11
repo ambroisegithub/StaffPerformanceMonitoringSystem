@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { useDispatch, useSelector } from "react-redux"
 import { createTask, fetchDailyTasks, submitDailyTasks } from "../../../../Redux/Slices/TaskSlices"
+import { fetchTaskTypes } from "../../../../Redux/Slices/TaskTypeSlices"
 import type { AppDispatch, RootState } from "../../../../Redux/store"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../ui/Card"
 import { Button } from "../../../ui/button"
@@ -25,6 +26,7 @@ import {
   FaExclamationCircle,
   FaSpinner,
   FaTasks,
+  FaTags,
 } from "react-icons/fa"
 import SupervisorDailyTasks from "./SupervisorDailyTasks"
 import Loader from "../../../ui/Loader"
@@ -53,6 +55,7 @@ const getStatusIcon = (status: string) => {
 const CreateTask: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const { loading, dailyTasks } = useSelector((state: RootState) => state.task)
+  const { taskTypes, loading: taskTypesLoading } = useSelector((state: RootState) => state.taskTypes)
   const user = useSelector((state: RootState) => state.login.user)
   const [formProgress, setFormProgress] = useState(0)
   const [activeTab, setActiveTab] = useState("create")
@@ -72,7 +75,15 @@ const CreateTask: React.FC = () => {
     achieved_deliverables: "",
     created_by: user?.id || 0,
     status: TaskStatus.IN_PROGRESS,
+    task_type_id: "", // ENHANCEMENT: Add task type field
   })
+
+  // ENHANCEMENT: Fetch task types on component mount
+  useEffect(() => {
+    if (taskTypes.length === 0) {
+      dispatch(fetchTaskTypes())
+    }
+  }, [dispatch, taskTypes.length])
 
   useEffect(() => {
     if (user?.id) {
@@ -116,6 +127,11 @@ const CreateTask: React.FC = () => {
     setTaskData((prev) => ({ ...prev, [name]: value }))
   }
 
+  // ENHANCEMENT: Handle task type selection
+  const handleTaskTypeChange = (value: string) => {
+    setTaskData((prev) => ({ ...prev, task_type_id: value }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (formProgress < 100) {
@@ -123,7 +139,12 @@ const CreateTask: React.FC = () => {
       return
     }
     try {
-      await dispatch(createTask(taskData)).unwrap()
+      // ENHANCEMENT: Include task type ID if selected
+      const submissionData = {
+        ...taskData,
+        task_type_id: taskData.task_type_id ? Number.parseInt(taskData.task_type_id) : undefined,
+      }
+      await dispatch(createTask(submissionData)).unwrap()
       setTaskData({
         title: "",
         description: "",
@@ -137,8 +158,9 @@ const CreateTask: React.FC = () => {
         achieved_deliverables: "",
         created_by: user?.id || 0,
         status: TaskStatus.IN_PROGRESS,
+        task_type_id: "", // ENHANCEMENT: Reset task type
       })
-      fetchDailyTasksData() 
+      fetchDailyTasksData()
     } catch (error) {}
   }
 
@@ -151,15 +173,14 @@ const CreateTask: React.FC = () => {
           dailyTaskId,
         }),
       ).unwrap()
-      fetchDailyTasksData() 
-    } catch (error) {
-    }
+      fetchDailyTasksData()
+    } catch (error) {}
   }
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     if (tab === "daily" && dailyTasks.length === 0) {
-      fetchDailyTasksData() 
+      fetchDailyTasksData()
     }
   }
 
@@ -261,6 +282,46 @@ const CreateTask: React.FC = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* ENHANCEMENT: Task Type Selection */}
+                    <div>
+                      <label htmlFor="task_type_id" className="block text-xs font-medium text-gray-700 mb-1">
+                        Task Type (Optional)
+                      </label>
+                      <Select
+                        value={taskData.task_type_id}
+                        onValueChange={handleTaskTypeChange}
+                        disabled={loading || taskTypesLoading}
+                      >
+                        <SelectTrigger className="w-full bg-white h-10 text-sm">
+                          <div className="flex items-center">
+                            <FaTags className="mr-2 text-gray-400 text-xs" />
+                            <span className="ml-1">
+                              {taskData.task_type_id
+                                ? taskTypes.find((t) => t.id.toString() === taskData.task_type_id)?.name ||
+                                  "Select task type"
+                                : "Select task type"}
+                            </span>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-white">
+                          <SelectItem value="none">
+                            <div className="flex items-center">
+                              <span>No task type</span>
+                            </div>
+                          </SelectItem>
+                          {taskTypes.map((taskType) => (
+                            <SelectItem key={taskType.id} value={taskType.id.toString()}>
+                              <div className="flex items-center">
+                                <FaTags className="text-blue mr-2 text-xs" />
+                                <span>{taskType.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {taskTypesLoading && <p className="text-xs text-gray-500 mt-1">Loading task types...</p>}
+                    </div>
 
                     {/* Description */}
                     <div className="md:col-span-2">

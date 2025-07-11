@@ -16,9 +16,10 @@ import {
   FaClock,
   FaPaperclip,
   FaExchangeAlt,
-  FaRedo,
+  FaTags,
 } from "react-icons/fa"
-import { useAppSelector } from "../../../Redux/hooks"
+import { useAppSelector, useAppDispatch } from "../../../Redux/hooks"
+import { fetchTaskTypes } from "../../../Redux/Slices/TaskTypeSlices"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import FileUpload from "./FileUpload"
 
@@ -47,8 +48,10 @@ const getStatusIcon = (status: string) => {
 }
 
 const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode = "create", initialData = null }) => {
+  const dispatch = useAppDispatch()
   const user = useAppSelector((state) => state.login.user)
   const { isReworking } = useAppSelector((state) => state.task)
+  const { taskTypes, loading: taskTypesLoading } = useAppSelector((state) => state.taskTypes)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formProgress, setFormProgress] = useState(0)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -69,7 +72,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
     achieved_deliverables: "",
     created_by: user?.id || 0,
     status: TaskStatus.IN_PROGRESS,
+    task_type_id: "", // ENHANCEMENT: Add task type field
   })
+
+  // ENHANCEMENT: Fetch task types when modal opens
+  useEffect(() => {
+    if (isOpen && taskTypes.length === 0) {
+      dispatch(fetchTaskTypes())
+    }
+  }, [isOpen, dispatch, taskTypes.length])
 
   useEffect(() => {
     if (isOpen) {
@@ -87,6 +98,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
           achieved_deliverables: initialData.achieved_deliverables || "",
           created_by: initialData.created_by || user?.id || 0,
           status: initialData.status || TaskStatus.IN_PROGRESS,
+          task_type_id: initialData.taskType?.id?.toString() || "", // ENHANCEMENT: Set existing task type
         })
         setSelectedFiles([])
       } else {
@@ -103,6 +115,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
           achieved_deliverables: "",
           created_by: user?.id || 0,
           status: TaskStatus.IN_PROGRESS,
+          task_type_id: "", // ENHANCEMENT: Reset task type
         })
         setSelectedFiles([])
       }
@@ -143,6 +156,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
     setTaskData((prev) => ({ ...prev, status: value }))
   }
 
+  // ENHANCEMENT: Handle task type selection
+  const handleTaskTypeChange = (value: string) => {
+    setTaskData((prev) => ({ ...prev, task_type_id: value }))
+  }
+
   const handleFilesChange = (files: File[]) => {
     setSelectedFiles(files)
   }
@@ -155,6 +173,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
     try {
       const submissionData = {
         ...taskData,
+        // ENHANCEMENT: Include task type ID if selected
+        task_type_id: taskData.task_type_id ? Number.parseInt(taskData.task_type_id) : undefined,
         attached_documents: selectedFiles.length > 0 ? selectedFiles : undefined,
       }
 
@@ -173,6 +193,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
         achieved_deliverables: "",
         created_by: user?.id || 0,
         status: TaskStatus.IN_PROGRESS,
+        task_type_id: "", // ENHANCEMENT: Reset task type
       })
       setSelectedFiles([])
       onClose()
@@ -250,11 +271,12 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
               <div className="mb-4 p-3 bg-orange-50 rounded-md border border-orange-100">
                 <div className="flex items-center text-orange-700">
                   <FaExchangeAlt className="mr-2" />
-                  <span>This is a shifted task from {initialData.originalDueDate?.split('T')[0] || 'a previous day'}</span>
+                  <span>
+                    This is a shifted task from {initialData.originalDueDate?.split("T")[0] || "a previous day"}
+                  </span>
                 </div>
               </div>
             )}
-
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div
@@ -322,6 +344,41 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
                       placeholder="Enter related project"
                     />
                   </div>
+                </div>
+
+                {/* ENHANCEMENT: Task Type Selection */}
+                <div className={showCompanyField ? "" : "md:col-span-2"}>
+                  <label htmlFor="task_type_id" className="block text-sm font-medium text-gray-700 mb-1">
+                    Task Type (Optional)
+                  </label>
+                  <Select
+                    value={taskData.task_type_id}
+                    onValueChange={handleTaskTypeChange}
+                    disabled={isLoading || taskTypesLoading}
+                  >
+                    <SelectTrigger className="w-full bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed">
+                      <div className="flex items-center">
+                        <FaTags className="mr-2 text-gray-400" />
+                        <SelectValue placeholder="Select task type" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="none">
+                        <div className="flex items-center px-2">
+                          <span>No task type</span>
+                        </div>
+                      </SelectItem>
+                      {taskTypes.map((taskType) => (
+                        <SelectItem key={taskType.id} value={taskType.id.toString()}>
+                          <div className="flex items-center px-2">
+                            <FaTags className="mr-2 text-blue-500" />
+                            <span>{taskType.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {taskTypesLoading && <p className="text-xs text-gray-500 mt-1">Loading task types...</p>}
                 </div>
 
                 <div className="md:col-span-2">
