@@ -53,12 +53,6 @@ const OverAllTaskList: React.FC<OverAllTaskListProps> = ({
   const [sortBy, setSortBy] = useState<string>("date")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
 
-  const toggleTaskExpanded = (taskId: number) => {
-    setExpandedTasks((prev) => ({
-      ...prev,
-      [taskId]: !prev[taskId],
-    }))
-  }
 
   const handleSelectTask = (task: Task) => {
     dispatch(setSelectedTask(task))
@@ -96,11 +90,39 @@ const OverAllTaskList: React.FC<OverAllTaskListProps> = ({
             <span>Rejected</span>
           </Badge>
         )
-      default:
+      case "pending":
         return (
           <Badge className="px-2 py-1 text-xs font-medium rounded-full bg-blue text-white flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>Pending</span>
+          </Badge>
+        )
+      case "completed":
+        return (
+          <Badge className="px-2 py-1 text-xs font-medium rounded-full bg-green text-white flex items-center gap-1">
+            <CheckCircle className="h-3 w-3" />
+            <span>Completed</span>
+          </Badge>
+        )
+      case "in_progress":
+        return (
+          <Badge className="px-2 py-1 text-xs font-medium rounded-full bg-yellow text-white flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>In Progress</span>
+          </Badge>
+        )
+      case "not_started":
+        return (
+          <Badge className="px-2 py-1 text-xs font-medium rounded-full bg-gray text-white flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>Not Started</span>
+          </Badge>
+        )
+      default:
+        return (
+          <Badge className="px-2 py-1 text-xs font-medium rounded-full bg-gray text-white flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>{status}</span>
           </Badge>
         )
     }
@@ -411,7 +433,10 @@ const OverAllTaskList: React.FC<OverAllTaskListProps> = ({
                                 Project
                               </th>
                               <th scope="col" className="px-6 py-3">
-                                Status
+                              Review Status
+                              </th>
+                              <th scope="col" className="px-6 py-3">
+                              Task Status
                               </th>
                               <th scope="col" className="px-6 py-3">
                                 Action
@@ -498,6 +523,8 @@ const OverAllTaskList: React.FC<OverAllTaskListProps> = ({
                                   )}
                                 </td>
                                 <td className="px-6 py-4">{getStatusBadge(task.review_status)}</td>
+                                <td className="px-6 py-4">{getStatusBadge(task.status)}</td>
+
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-2">
                                     <button

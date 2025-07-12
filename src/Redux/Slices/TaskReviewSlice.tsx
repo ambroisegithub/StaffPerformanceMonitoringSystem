@@ -71,8 +71,8 @@ export interface Task {
   description: string
   company: string
   department: string
-  status: "pending" | "in_progress" | "completed" | "delayed"
-  review_status: "pending" | "approved" | "rejected"
+  status: string
+  review_status: string
   contribution: string
   achieved_deliverables: string
   related_project: string
@@ -270,7 +270,7 @@ interface TaskReviewState {
   teamMembersError: string | null
   pagination: Pagination
   filters: TaskReviewFilters
-  allDailyTasks: TeamTasksData[]; // Add this line
+  allDailyTasks: TeamTasksData[]; 
   allDailyTasksLoading: boolean;
   allDailyTasksError: string | null;
     userTaskReport: UserTaskReport | null

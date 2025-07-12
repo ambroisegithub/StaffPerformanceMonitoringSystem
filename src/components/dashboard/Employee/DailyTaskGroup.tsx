@@ -409,11 +409,11 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
     : submissionDate.toISOString().split("T")[0]
 
   const isToday = submissionDateStr === today
-  const isPast = isNaN(submissionDate.getTime()) ? false : submissionDate < new Date(today)
-  const isFuture = isNaN(submissionDate.getTime()) ? false : submissionDate > new Date(today)
 
   // Check if any tasks are in progress
   const hasInProgressTasks = dailyTask.tasks.some(task => task.status === "in_progress")
+  // Check if we have at least one completed task
+  const hasCompletedTask = dailyTask.tasks.some(task => task.status === "completed")
 
   // Chat functionality similar to TaskList
   const handleOpenTaskChat = (task: Task, userId?: number, userName?: string) => {
@@ -503,9 +503,9 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
   const handleSubmit = async () => {
     if (!user) return
     
-    // Check if there are any in-progress tasks
-    if (hasInProgressTasks) {
-      alert("Please complete all tasks before submitting. You have tasks that are still in progress.")
+    // Check if we have at least one completed task
+    if (!hasCompletedTask) {
+      alert("You need to have at least one completed task to submit your daily tasks.")
       return
     }
     
@@ -525,17 +525,13 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
 
   const getButtonText = () => {
     if (dailyTask.submitted) return "Submitted"
-    if (isPast) return "Cannot Submit Past Tasks"
-    if (isFuture) return "Cannot Submit Future Tasks"
-    if (hasInProgressTasks) return "Complete All Tasks To Submit"
+    if (!hasCompletedTask) return "Complete At Least One Task To Submit"
     return "Submit Daily Tasks"
   }
 
   const getButtonColor = () => {
     if (dailyTask.submitted) return "bg-green text-white cursor-not-allowed"
-    if (isPast) return "bg-red text-white cursor-not-allowed"
-    if (isFuture) return "bg-yellow text-white cursor-not-allowed"
-    if (hasInProgressTasks) return "bg-orange-500 text-white cursor-not-allowed"
+    if (!hasCompletedTask) return "bg-orange-500 text-white cursor-not-allowed"
     return "bg-green text-white hover:bg-green-600"
   }
 
@@ -966,7 +962,7 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                 <div className="mt-6 flex justify-end">
                   <Button
                     onClick={handleSubmit}
-                    disabled={!isToday || dailyTask.submitted || isPast || isFuture || isSubmitting || hasInProgressTasks}
+                    disabled={ dailyTask.submitted || isSubmitting || !hasCompletedTask}
                     className={`${getButtonColor()} transition-colors duration-300`}
                   >
                     {isSubmitting ? (

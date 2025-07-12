@@ -410,12 +410,7 @@ const CreateTask: React.FC = () => {
                           </div>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={TaskStatus.PENDING}>
-                            <div className="flex items-center">
-                              <FaClock className="text-yellow mr-2 text-xs" />
-                              <span>Pending</span>
-                            </div>
-                          </SelectItem>
+
                           <SelectItem value={TaskStatus.IN_PROGRESS}>
                             <div className="flex items-center">
                               <FaClock className="text-blue mr-2 text-xs" />
@@ -428,12 +423,7 @@ const CreateTask: React.FC = () => {
                               <span>Completed</span>
                             </div>
                           </SelectItem>
-                          <SelectItem value={TaskStatus.DELAYED}>
-                            <div className="flex items-center">
-                              <FaExclamationCircle className="text-red mr-2 text-xs" />
-                              <span>Delayed</span>
-                            </div>
-                          </SelectItem>
+
                         </SelectContent>
                       </Select>
                     </div>
