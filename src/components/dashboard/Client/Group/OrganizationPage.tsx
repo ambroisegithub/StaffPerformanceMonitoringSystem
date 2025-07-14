@@ -18,18 +18,27 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Edit3,
+  Save,
+  XCircle,
 } from "lucide-react"
 import type { AppDispatch, RootState } from "../../../../Redux/store"
 import { updateOrganization, clearError, getOrganizationById } from "../../../../Redux/Slices/OrganizationSlice"
 
 interface Department {
+  id?: number
   departmentName: string
+  isEditing?: boolean
+  isNew?: boolean
 }
 
 interface Subsidiary {
+  id?: number
   subsidiaryName: string
   tinNumber: string
   departments: Department[]
+  isEditing?: boolean
+  isNew?: boolean
 }
 
 interface OrganizationFormValues {
@@ -38,6 +47,8 @@ interface OrganizationFormValues {
   departments: Department[]
   subsidiaries: Subsidiary[]
   hasSubsidiaries: boolean
+  existingDepartments: Department[]
+  existingSubsidiaries: Subsidiary[]
 }
 
 interface NotificationProps {
@@ -123,35 +134,11 @@ const OrganizationPage: React.FC = () => {
     }
   }, [dispatch, user?.organization?.id])
 
-  // Set initial values based on organization data
-  const initialValues: OrganizationFormValues = {
-    name: currentOrganization?.name || "",
-    tinNumber: currentOrganization?.tinNumber || "",
-    departments: [],
-    subsidiaries: [],
-    hasSubsidiaries: user?.organization?.hasSubsidiaries || false,
-  }
-
-  // Get the maximum number of subsidiaries allowed from user login and current organization
-  const maxSubsidiariesAllowed = user?.organization?.numberOfSubsidiaries || 0
-
-  // Calculate remaining subsidiaries that can be added (excluding main organization from count)
-  const actualSubsidiariesCount =
-    currentOrganization?.subsidiaries?.filter(
-      (sub) => sub.name !== currentOrganization?.name || sub.tin !== currentOrganization?.tinNumber,
-    ).length || 0
-
-  const remainingSubsidiaries = maxSubsidiariesAllowed - actualSubsidiariesCount
-
-  // Get independent departments (organization-level departments not attached to subsidiaries)
-  // Modified to show unique department names only
-  const getIndependentDepartments = () => {
-    if (!currentOrganization?.departments) {
-      return []
-    }
-
-    // Only show departments that belong to the main organization
-    // Filter out departments that belong to actual subsidiaries (not the main org)
+  // Get existing data with editing capabilities
+  const getExistingDepartmentsWithEdit = () => {
+    if (!currentOrganization?.departments) return []
+    
+    // Filter departments that don't belong to subsidiaries (independent departments)
     const actualSubsidiaries =
       currentOrganization.subsidiaries?.filter(
         (sub) => sub.name !== currentOrganization.name || sub.tin !== currentOrganization.tinNumber,
@@ -175,25 +162,54 @@ const OrganizationPage: React.FC = () => {
       [] as typeof filteredDepartments,
     )
 
-    return uniqueDepartments
+    return uniqueDepartments.map((dept) => ({
+      id: dept.id,
+      departmentName: dept.name,
+      isEditing: false,
+      isNew: false
+    }))
   }
 
-  // Get existing subsidiary departments grouped by subsidiary (excluding main organization)
-  const getExistingSubsidiaryDepartments = () => {
-    return (
-      currentOrganization?.subsidiaries
-        ?.filter(
-          (subsidiary) =>
-            subsidiary.name !== currentOrganization.name || subsidiary.tin !== currentOrganization.tinNumber,
-        )
-        .map((subsidiary) => ({
-          id: subsidiary.id,
-          name: subsidiary.name,
-          tin: subsidiary.tin,
-          departments: subsidiary.departments || [],
-        })) || []
-    )
+  const getExistingSubsidiariesWithEdit = () => {
+    if (!currentOrganization?.subsidiaries) return []
+    
+    // Filter out the main organization from subsidiaries
+    return currentOrganization.subsidiaries
+      .filter((sub) => 
+        sub.name !== currentOrganization.name || sub.tin !== currentOrganization.tinNumber
+      )
+      .map((sub) => ({
+        id: sub.id,
+        subsidiaryName: sub.name,
+        tinNumber: sub.tin,
+        departments: (sub.departments || []).map((dept) => ({
+          id: dept.id,
+          departmentName: dept.name,
+          isEditing: false,
+          isNew: false
+        })),
+        isEditing: false,
+        isNew: false
+      }))
   }
+
+  // Set initial values based on organization data
+  const initialValues: OrganizationFormValues = {
+    name: currentOrganization?.name || "",
+    tinNumber: currentOrganization?.tinNumber || "",
+    departments: [],
+    subsidiaries: [],
+    hasSubsidiaries: user?.organization?.hasSubsidiaries || false,
+    existingDepartments: getExistingDepartmentsWithEdit(),
+    existingSubsidiaries: getExistingSubsidiariesWithEdit(),
+  }
+
+  // Get the maximum number of subsidiaries allowed from user login and current organization
+  const maxSubsidiariesAllowed = user?.organization?.numberOfSubsidiaries || 0
+
+  // Calculate remaining subsidiaries that can be added (excluding main organization from count)
+  const actualSubsidiariesCount = getExistingSubsidiariesWithEdit().length
+  const remainingSubsidiaries = maxSubsidiariesAllowed - actualSubsidiariesCount
 
   useEffect(() => {
     if (error) {
@@ -235,10 +251,37 @@ const OrganizationPage: React.FC = () => {
         }
       }
 
+      // Prepare data for submission including existing edited items
+      const allDepartments = [
+        ...values.departments,
+        ...values.existingDepartments.map(dept => ({
+          id: dept.id,
+          departmentName: dept.departmentName
+        }))
+      ]
+
+      const allSubsidiaries = [
+        ...values.subsidiaries,
+        ...values.existingSubsidiaries.map(sub => ({
+          id: sub.id,
+          subsidiaryName: sub.subsidiaryName,
+          tinNumber: sub.tinNumber,
+          departments: [
+            ...sub.departments.map(dept => ({
+              id: dept.id,
+              departmentName: dept.departmentName
+            }))
+          ]
+        }))
+      ]
+
       // Include organization_id in the payload
       const dataToSubmit = {
-        ...values,
-        subsidiaries: values.hasSubsidiaries ? values.subsidiaries : [],
+        name: values.name,
+        tinNumber: values.tinNumber,
+        hasSubsidiaries: values.hasSubsidiaries,
+        departments: allDepartments,
+        subsidiaries: values.hasSubsidiaries ? allSubsidiaries : [],
         organization_id: user.organization.id, // Add organization_id
       }
 
@@ -304,8 +347,18 @@ const OrganizationPage: React.FC = () => {
   // Function to get step labels based on hasSubsidiaries value
   const getStepLabels = (hasSubsidiaries: boolean) => {
     return hasSubsidiaries
-      ? ["Main Organization", "Add Subsidiaries", "Add Departments", "Review"]
+      ? ["Main Organization", "Edit Subsidiaries", "Add Departments", "Review"]
       : ["Main Organization", "Review"]
+  }
+
+  // Helper function to toggle edit mode for departments
+  const toggleDepartmentEdit = (setFieldValue, fieldPath: string, index: number, currentValue: boolean) => {
+    setFieldValue(`${fieldPath}.${index}.isEditing`, !currentValue)
+  }
+
+  // Helper function to toggle edit mode for subsidiaries
+  const toggleSubsidiaryEdit = (setFieldValue, index: number, currentValue: boolean) => {
+    setFieldValue(`existingSubsidiaries.${index}.isEditing`, !currentValue)
   }
 
   return (
@@ -429,29 +482,84 @@ const OrganizationPage: React.FC = () => {
                   </div>
 
                   <div>
-                    {/* Display existing independent departments - Now showing unique departments only */}
-                    {getIndependentDepartments().length > 0 && (
+                    {/* Display existing independent departments with edit functionality */}
+                    {values.existingDepartments.length > 0 && (
                       <div className="mb-4 p-3 bg-gray-50 rounded-md">
                         <h4 className="text-sm font-medium text-gray-700 mb-2">
-                          Existing Independent Departments ({getIndependentDepartments().length} unique)
+                          Existing Independent Departments ({values.existingDepartments.length} unique)
                         </h4>
-                        <div className="space-y-2">
-                          {getIndependentDepartments().map((dept, index) => (
-                            <div key={dept.id} className="flex items-center space-x-2">
-                              <Field
-                                name={`existingDepartments.${index}.name`}
-                                type="text"
-                                value={dept.name}
-                                readOnly
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 focus:outline-none"
-                              />
-                              <span className="text-xs text-gray-500 px-2 py-1 bg-blue-100 rounded">Existing</span>
+                        <FieldArray name="existingDepartments">
+                          {({ remove }) => (
+                            <div className="space-y-2">
+                              {values.existingDepartments.map((dept, index) => (
+                                <div key={dept.id || index} className="flex items-center space-x-2">
+                                  {dept.isEditing ? (
+                                    <>
+                                      <Field
+                                        name={`existingDepartments.${index}.departmentName`}
+                                        type="text"
+                                        className="flex-1 px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleDepartmentEdit(setFieldValue, 'existingDepartments', index, true)}
+                                        className="p-2 text-green hover:bg-green-50 rounded"
+                                        title="Save changes"
+                                      >
+                                        <Save size={16} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          // Reset the value and exit edit mode
+                                          const originalDept = getExistingDepartmentsWithEdit().find(d => d.id === dept.id)
+                                          if (originalDept) {
+                                            setFieldValue(`existingDepartments.${index}.departmentName`, originalDept.departmentName)
+                                          }
+                                          toggleDepartmentEdit(setFieldValue, 'existingDepartments', index, true)
+                                        }}
+                                        className="p-2 text-red hover:bg-red-50 rounded"
+                                        title="Cancel editing"
+                                      >
+                                        <XCircle size={16} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Field
+                                        name={`existingDepartments.${index}.departmentName`}
+                                        type="text"
+                                        value={dept.departmentName}
+                                        readOnly
+                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 focus:outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleDepartmentEdit(setFieldValue, 'existingDepartments', index, false)}
+                                        className="p-2 text-blue hover:bg-blue-50 rounded"
+                                        title="Edit department"
+                                      >
+                                        <Edit3 size={16} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => remove(index)}
+                                        className="p-2 text-red hover:bg-red-50 rounded"
+                                        title="Delete department"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                      <span className="text-xs text-gray-500 px-2 py-1 bg-blue-100 rounded">Existing</span>
+                                    </>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-
+                          )}
+                        </FieldArray>
                       </div>
                     )}
+                    
                     {/* Add new departments section */}
                     <FieldArray name="departments">
                       {({ push, remove }) => (
@@ -476,7 +584,7 @@ const OrganizationPage: React.FC = () => {
                           ))}
                           <button
                             type="button"
-                            onClick={() => push({ departmentName: "" })}
+                            onClick={() => push({ departmentName: "", isNew: true })}
                             className="flex items-center space-x-2 px-4 py-2 bg-green text-white rounded-md hover:bg-blue"
                           >
                             <Plus size={16} />
@@ -498,12 +606,12 @@ const OrganizationPage: React.FC = () => {
                         {loading ? (
                           <>
                             <Loader size={16} className="mr-2 animate-spin" />
-                            validating...
+                            Updating...
                           </>
                         ) : (
                           <>
                             <Check size={16} className="mr-2" />
-                            Validate
+                            Update Organization
                           </>
                         )}
                       </button>
@@ -513,7 +621,7 @@ const OrganizationPage: React.FC = () => {
               </motion.div>
             )}
 
-            {/* Step 2: Add Subsidiaries (only if hasSubsidiaries is true) */}
+            {/* Step 2: Edit Subsidiaries (only if hasSubsidiaries is true) */}
             {step === 2 && values.hasSubsidiaries && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -521,7 +629,7 @@ const OrganizationPage: React.FC = () => {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <h2 className="text-xl font-semibold mb-4">Add Subsidiaries</h2>
+                <h2 className="text-xl font-semibold mb-4">Edit Subsidiaries</h2>
 
                 {/* Display subsidiary limit information with existing subsidiaries count */}
                 <div className="flex items-center mb-4 p-3 bg-blue bg-opacity-10 rounded-md">
@@ -546,43 +654,175 @@ const OrganizationPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Display existing subsidiaries */}
-                {getExistingSubsidiaryDepartments().length > 0 && (
+                {/* Display existing subsidiaries with edit functionality */}
+                {values.existingSubsidiaries.length > 0 && (
                   <div className="mb-6 p-4 bg-gray-50 rounded-md">
                     <h3 className="text-md font-medium mb-3">Existing Subsidiaries</h3>
-                    <div className="space-y-4">
-                      {getExistingSubsidiaryDepartments().map((subsidiary, index) => (
-                        <div key={subsidiary.id} className="p-3 border border-gray-200 rounded-md bg-white">
-                          <div className="flex justify-between items-center mb-2">
-                            <h4 className="text-sm font-medium text-gray-800">{subsidiary.name}</h4>
-                            <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">Existing</span>
-                          </div>
-                          <p className="text-xs text-gray-600 mb-2">TIN: {subsidiary.tin}</p>
-                          {subsidiary.departments.length > 0 && (
-                            <div>
-                              <h5 className="text-xs font-medium text-gray-700 mb-1">Departments:</h5>
-                              <div className="flex flex-wrap gap-1">
-                                {subsidiary.departments.map((dept, deptIndex) => (
-                                  <span key={dept.id} className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                                    {dept.name}
-                                  </span>
-                                ))}
+                    <FieldArray name="existingSubsidiaries">
+                      {({ remove }) => (
+                        <div className="space-y-4">
+                          {values.existingSubsidiaries.map((subsidiary, index) => (
+                            <div key={subsidiary.id || index} className="p-3 border border-gray-200 rounded-md bg-white">
+                              <div className="flex justify-between items-center mb-2">
+                                {subsidiary.isEditing ? (
+                                  <div className="flex-1 space-y-2 mr-4">
+                                    <Field
+                                      name={`existingSubsidiaries.${index}.subsidiaryName`}
+                                      type="text"
+                                      className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green"
+                                      placeholder="Subsidiary name"
+                                    />
+                                    <Field
+                                      name={`existingSubsidiaries.${index}.tinNumber`}
+                                      type="text"
+                                      className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green"
+                                      placeholder="TIN number"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <h4 className="text-sm font-medium text-gray-800">{subsidiary.subsidiaryName}</h4>
+                                    <p className="text-xs text-gray-600 mb-2">TIN: {subsidiary.tinNumber}</p>
+                                  </div>
+                                )}
+                                <div className="flex space-x-2">
+                                  {subsidiary.isEditing ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleSubsidiaryEdit(setFieldValue, index, true)}
+                                        className="p-2 text-green hover:bg-green-50 rounded"
+                                        title="Save changes"
+                                      >
+                                        <Save size={16} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const originalSub = getExistingSubsidiariesWithEdit().find(s => s.id === subsidiary.id)
+                                          if (originalSub) {
+                                            setFieldValue(`existingSubsidiaries.${index}.subsidiaryName`, originalSub.subsidiaryName)
+                                            setFieldValue(`existingSubsidiaries.${index}.tinNumber`, originalSub.tinNumber)
+                                          }
+                                          toggleSubsidiaryEdit(setFieldValue, index, true)
+                                        }}
+                                        className="p-2 text-red hover:bg-red-50 rounded"
+                                        title="Cancel editing"
+                                      >
+                                        <XCircle size={16} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleSubsidiaryEdit(setFieldValue, index, false)}
+                                        className="p-2 text-blue hover:bg-blue-50 rounded"
+                                        title="Edit subsidiary"
+                                      >
+                                        <Edit3 size={16} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => remove(index)}
+                                        className="p-2 text-red hover:bg-red-50 rounded"
+                                        title="Delete subsidiary"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                      <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">Existing</span>
+                                    </>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Subsidiary Departments with Edit Functionality */}
+                              {subsidiary.departments.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-medium text-gray-700 mb-1">Departments:</h5>
+                                  <FieldArray name={`existingSubsidiaries.${index}.departments`}>
+                                    {({ remove: removeDept }) => (
+                                      <div className="space-y-1">
+                                        {subsidiary.departments.map((dept, deptIndex) => (
+                                          <div key={dept.id || deptIndex} className="flex items-center space-x-2">
+                                            {dept.isEditing ? (
+                                              <>
+                                                <Field
+                                                  name={`existingSubsidiaries.${index}.departments.${deptIndex}.departmentName`}
+                                                  type="text"
+                                                  className="flex-1 px-2 py-1 border border-green-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-green"
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => toggleDepartmentEdit(setFieldValue, `existingSubsidiaries.${index}.departments`, deptIndex, true)}
+                                                  className="p-1 text-green hover:bg-green-50 rounded"
+                                                  title="Save changes"
+                                                >
+                                                  <Save size={12} />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const originalDept = getExistingSubsidiariesWithEdit()
+                                                      .find(s => s.id === subsidiary.id)
+                                                      ?.departments.find(d => d.id === dept.id)
+                                                    if (originalDept) {
+                                                      setFieldValue(`existingSubsidiaries.${index}.departments.${deptIndex}.departmentName`, originalDept.departmentName)
+                                                    }
+                                                    toggleDepartmentEdit(setFieldValue, `existingSubsidiaries.${index}.departments`, deptIndex, true)
+                                                  }}
+                                                  className="p-1 text-red hover:bg-red-50 rounded"
+                                                  title="Cancel editing"
+                                                >
+                                                  <XCircle size={12} />
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded flex-1">
+                                                  {dept.departmentName}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => toggleDepartmentEdit(setFieldValue, `existingSubsidiaries.${index}.departments`, deptIndex, false)}
+                                                  className="p-1 text-blue hover:bg-blue-50 rounded"
+                                                  title="Edit department"
+                                                >
+                                                  <Edit3 size={12} />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => removeDept(deptIndex)}
+                                                  className="p-1 text-red hover:bg-red-50 rounded"
+                                                  title="Delete department"
+                                                >
+                                                  <Trash2 size={12} />
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </FieldArray>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    </FieldArray>
                   </div>
                 )}
 
+                {/* Add New Subsidiaries */}
                 <FieldArray name="subsidiaries">
                   {({ push, remove }) => (
                     <div>
                       {values.subsidiaries.map((subsidiary: Subsidiary, index: number) => (
                         <div key={index} className="mb-4 p-4 border rounded-md">
                           <div className="flex justify-between items-center mb-2">
-                            <h3 className="text-lg font-medium">Subsidiary {index + 1}</h3>
+                            <h3 className="text-lg font-medium">New Subsidiary {index + 1}</h3>
                             <button
                               type="button"
                               onClick={() => remove(index)}
@@ -637,11 +877,11 @@ const OrganizationPage: React.FC = () => {
                       {values.subsidiaries.length < remainingSubsidiaries ? (
                         <button
                           type="button"
-                          onClick={() => push({ subsidiaryName: "", tinNumber: "", departments: [] })}
+                          onClick={() => push({ subsidiaryName: "", tinNumber: "", departments: [], isNew: true })}
                           className="flex items-center space-x-2 px-4 py-2 bg-green text-white rounded-md hover:bg-blue"
                         >
                           <Plus size={16} />
-                          <span>Add Subsidiary</span>
+                          <span>Add New Subsidiary</span>
                         </button>
                       ) : (
                         remainingSubsidiaries > 0 && (
@@ -670,12 +910,80 @@ const OrganizationPage: React.FC = () => {
               >
                 <h2 className="text-xl font-semibold mb-4">Add Departments to Subsidiaries</h2>
 
+                {/* Add departments to existing subsidiaries */}
+                {values.existingSubsidiaries.length > 0 && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-md">
+                    <h3 className="text-md font-medium mb-3">Add Departments to Existing Subsidiaries</h3>
+                    <FieldArray name="existingSubsidiaries">
+                      {() => (
+                        <div className="space-y-4">
+                          {values.existingSubsidiaries.map((subsidiary, subsidiaryIndex) => (
+                            <div key={subsidiary.id} className="p-3 border border-gray-200 rounded-md bg-white">
+                              <h4 className="text-sm font-medium text-gray-800 mb-2">{subsidiary.subsidiaryName}</h4>
+                              <FieldArray name={`existingSubsidiaries.${subsidiaryIndex}.departments`}>
+                                {({ push, remove: removeDepartment }) => (
+                                  <div>
+                                    {/* Show existing departments */}
+                                    {subsidiary.departments.filter(dept => !dept.isNew).length > 0 && (
+                                      <div className="mb-2">
+                                        <p className="text-xs text-gray-600 mb-1">Existing departments:</p>
+                                        <div className="flex flex-wrap gap-1 mb-2">
+                                          {subsidiary.departments.filter(dept => !dept.isNew).map((dept, deptIndex) => (
+                                            <span key={dept.id} className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                                              {dept.departmentName}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* New departments being added */}
+                                    {subsidiary.departments.filter(dept => dept.isNew).map((department, deptIndex) => {
+                                      const actualIndex = subsidiary.departments.findIndex(d => d === department)
+                                      return (
+                                        <div key={actualIndex} className="flex items-center space-x-2 mb-2">
+                                          <Field
+                                            name={`existingSubsidiaries.${subsidiaryIndex}.departments.${actualIndex}.departmentName`}
+                                            type="text"
+                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green"
+                                            placeholder="Enter department name"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => removeDepartment(actualIndex)}
+                                            className="p-2 text-red hover:bg-red-50 rounded"
+                                          >
+                                            <Trash2 size={16} />
+                                          </button>
+                                        </div>
+                                      )
+                                    })}
+                                    <button
+                                      type="button"
+                                      onClick={() => push({ departmentName: "", isNew: true })}
+                                      className="flex items-center space-x-2 px-3 py-2 bg-green text-white rounded-md hover:bg-blue text-sm"
+                                    >
+                                      <Plus size={14} />
+                                      <span>Add Department</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </FieldArray>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </FieldArray>
+                  </div>
+                )}
+
+                {/* Add departments to new subsidiaries */}
                 <FieldArray name="subsidiaries">
                   {() => (
                     <div>
                       {values.subsidiaries.map((subsidiary: Subsidiary, subsidiaryIndex: number) => (
                         <div key={subsidiaryIndex} className="mb-4 p-4 border rounded-md">
-                          <h3 className="text-lg font-medium mb-2">{subsidiary.subsidiaryName}</h3>
+                          <h3 className="text-lg font-medium mb-2">New Subsidiary: {subsidiary.subsidiaryName}</h3>
                           <FieldArray name={`subsidiaries.${subsidiaryIndex}.departments`}>
                             {({ push, remove: removeDepartment }) => (
                               <div>
@@ -698,7 +1006,7 @@ const OrganizationPage: React.FC = () => {
                                 ))}
                                 <button
                                   type="button"
-                                  onClick={() => push({ departmentName: "" })}
+                                  onClick={() => push({ departmentName: "", isNew: true })}
                                   className="flex items-center space-x-2 px-4 py-2 bg-green text-white rounded-md hover:bg-blue"
                                 >
                                   <Plus size={16} />
@@ -761,7 +1069,7 @@ const OrganizationPage: React.FC = () => {
                           )}
                         </dl>
 
-                        {/* Main Organization Departments */}
+                        {/* Main Organization New Departments */}
                         {values.departments.length > 0 && (
                           <div className="mt-4">
                             <h4 className="text-md font-medium mb-2">New Departments:</h4>
@@ -776,19 +1084,19 @@ const OrganizationPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Show existing unique departments in review */}
-                        {getIndependentDepartments().length > 0 && (
+                        {/* Show existing departments */}
+                        {values.existingDepartments.length > 0 && (
                           <div className="mt-4">
                             <h4 className="text-md font-medium mb-2">
-                              Existing Unique Departments ({getIndependentDepartments().length}):
+                              Existing Departments ({values.existingDepartments.length}):
                             </h4>
                             <ul className="list-none pl-4 border-l border-gray-300">
-                              {getIndependentDepartments().map((dept, index: number) => (
+                              {values.existingDepartments.map((dept, index: number) => (
                                 <li key={dept.id} className="text-sm py-1 flex items-center">
                                   <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
-                                  <span className="text-gray-600">{dept.name}</span>
+                                  <span className="text-gray-600">{dept.departmentName}</span>
                                   <span className="ml-2 text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
-                                    Existing
+                                    {dept.isEditing ? "Modified" : "Existing"}
                                   </span>
                                 </li>
                               ))}
@@ -799,18 +1107,24 @@ const OrganizationPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Subsidiaries Section - Only show if hasSubsidiaries is true */}
-                  {values.hasSubsidiaries && values.subsidiaries.length > 0 && (
+                  {/* Subsidiaries Section - Show both existing and new */}
+                  {values.hasSubsidiaries && (values.subsidiaries.length > 0 || values.existingSubsidiaries.length > 0) && (
                     <div className="bg-gray-50 p-4 rounded-md">
-                      <h3 className="text-lg font-medium mb-2">New Subsidiaries</h3>
+                      <h3 className="text-lg font-medium mb-2">Subsidiaries</h3>
                       <div className="space-y-4 pl-4 border-l-2 border-gray-300">
-                        {values.subsidiaries.map((subsidiary: Subsidiary, index: number) => (
-                          <div key={index} className="mb-2">
+                        {/* Existing Subsidiaries */}
+                        {values.existingSubsidiaries.map((subsidiary: Subsidiary, index: number) => (
+                          <div key={subsidiary.id} className="mb-2">
                             <div
                               className="flex items-center justify-between cursor-pointer"
                               onClick={() => toggleSubsidiarySection(index)}
                             >
-                              <h4 className="text-md font-medium">{subsidiary.subsidiaryName}</h4>
+                              <h4 className="text-md font-medium flex items-center">
+                                {subsidiary.subsidiaryName}
+                                <span className="ml-2 text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
+                                  {subsidiary.isEditing ? "Modified" : "Existing"}
+                                </span>
+                              </h4>
                               {(expandedSections.subsidiaries as Record<number, boolean>)[index] ? (
                                 <ChevronUp size={18} className="text-gray-500" />
                               ) : (
@@ -833,7 +1147,12 @@ const OrganizationPage: React.FC = () => {
                                       {subsidiary.departments.map((dept: Department, deptIndex: number) => (
                                         <li key={deptIndex} className="text-sm py-1 flex items-center">
                                           <div className="w-2 h-2 bg-green rounded-full mr-2"></div>
-                                          {dept.departmentName}
+                                          <span>{dept.departmentName}</span>
+                                          {dept.isNew && (
+                                            <span className="ml-2 text-xs text-blue-500 px-2 py-1 bg-blue-100 rounded">
+                                              New
+                                            </span>
+                                          )}
                                         </li>
                                       ))}
                                     </ul>
@@ -843,6 +1162,55 @@ const OrganizationPage: React.FC = () => {
                             )}
                           </div>
                         ))}
+
+                        {/* New Subsidiaries */}
+                        {values.subsidiaries.map((subsidiary: Subsidiary, index: number) => {
+                          const adjustedIndex = index + values.existingSubsidiaries.length
+                          return (
+                            <div key={index} className="mb-2">
+                              <div
+                                className="flex items-center justify-between cursor-pointer"
+                                onClick={() => toggleSubsidiarySection(adjustedIndex)}
+                              >
+                                <h4 className="text-md font-medium flex items-center">
+                                  {subsidiary.subsidiaryName}
+                                  <span className="ml-2 text-xs text-blue-500 px-2 py-1 bg-blue-100 rounded">
+                                    New
+                                  </span>
+                                </h4>
+                                {(expandedSections.subsidiaries as Record<number, boolean>)[adjustedIndex] ? (
+                                  <ChevronUp size={18} className="text-gray-500" />
+                                ) : (
+                                  <ChevronDown size={18} className="text-gray-500" />
+                                )}
+                              </div>
+
+                              {(expandedSections.subsidiaries as Record<number, boolean>)[adjustedIndex] && (
+                                <div className="mt-2 pl-4 border-l border-gray-300">
+                                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                    <dt className="text-sm font-medium text-gray-500">TIN:</dt>
+                                    <dd className="text-sm text-gray-900">{subsidiary.tinNumber}</dd>
+                                  </dl>
+
+                                  {/* Subsidiary Departments */}
+                                  {subsidiary.departments.length > 0 && (
+                                    <div className="mt-2">
+                                      <h5 className="text-sm font-medium mb-1">Departments:</h5>
+                                      <ul className="list-none pl-4 border-l border-gray-300">
+                                        {subsidiary.departments.map((dept: Department, deptIndex: number) => (
+                                          <li key={deptIndex} className="text-sm py-1 flex items-center">
+                                            <div className="w-2 h-2 bg-green rounded-full mr-2"></div>
+                                            {dept.departmentName}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}

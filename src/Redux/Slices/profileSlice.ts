@@ -108,7 +108,6 @@ export const updateProfilePicture = createAsyncThunk(
       showSuccessToast("Profile picture updated successfully")
       return response.data.data.profilePictureUrl
     } catch (error: any) {
-      console.error("Profile picture update error:", error)
       const errorMessage = error.response?.data?.message || "Failed to update profile picture"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
