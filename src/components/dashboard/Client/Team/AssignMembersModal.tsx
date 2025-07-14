@@ -1,6 +1,4 @@
-
 // @ts-nocheck
-
 "use client"
 
 import React from "react"
@@ -38,8 +36,30 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(5)
 
-  // Get existing member IDs to filter them out
-  const existingMemberIds = team.members.map((member) => member.id)
+  // Include supervisor as a team member
+  const allTeamMembers = useMemo(() => {
+    const members = [...team.members]
+    
+    // Add supervisor to members if not already included
+    const supervisorAlreadyInMembers = members.some(member => member.id === team.supervisor.id)
+    if (!supervisorAlreadyInMembers) {
+      members.push({
+        id: team.supervisor.id,
+        name: team.supervisor.name,
+        email: team.supervisor.email,
+        role: team.supervisor.role,
+        level: team.supervisor.level || "None",
+        firstName: team.supervisor.firstName || team.supervisor.name?.split(' ')[0] || '',
+        lastName: team.supervisor.lastName || team.supervisor.name?.split(' ').slice(1).join(' ') || '',
+        username: team.supervisor.username || team.supervisor.email
+      })
+    }
+    
+    return members
+  }, [team.members, team.supervisor])
+
+  // Get existing member IDs (including supervisor)
+  const existingMemberIds = allTeamMembers.map((member) => member.id)
 
   // Get supervisor information
   const supervisorRole = team.supervisor.role
@@ -49,7 +69,7 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
   // Filter eligible users based on hierarchy (for assigning)
   const eligibleUsers = useMemo(() => {
     return users.filter((user) => {
-      // Don't show users already in the team
+      // Don't show users already in the team (including supervisor)
       if (existingMemberIds.includes(user.id)) {
         return false
       }
@@ -76,22 +96,23 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
     })
   }, [users, existingMemberIds, isOverallSupervisor, supervisorLevel])
 
-  // Filter current team members (for removing)
+  // Filter current team members (for removing) - include supervisor but make it non-removable
   const currentTeamMembers = useMemo(() => {
-    return team.members.filter((member) => {
+    return allTeamMembers.filter((member) => {
       // Filter by search term
       const matchesSearch =
         member.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (member.firstName && member.firstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (member.lastName && member.lastName.toLowerCase().includes(searchTerm.toLowerCase()))
+        (member.lastName && member.lastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (member.name && member.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
       // Filter by role
       const matchesRole = roleFilter === "all" || member.role === roleFilter
 
       return matchesSearch && matchesRole
     })
-  }, [team.members, searchTerm, roleFilter])
+  }, [allTeamMembers, searchTerm, roleFilter])
 
   // Apply search and role filters for assign tab
   const filteredUsers = useMemo(() => {
@@ -152,19 +173,33 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
   }
 
   const handleUserToggle = (userId: number) => {
+    // Don't allow selecting the supervisor for removal
+    if (activeTab === "remove" && userId === team.supervisor.id) {
+      return
+    }
+
     setSelectedUserIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
   }
 
   const handleSelectAll = () => {
-    if (selectedUserIds.length === currentUsers.length) {
-      // If all are selected, deselect all
-      setSelectedUserIds((prev) => prev.filter((id) => !currentUsers.map((user) => user.id).includes(id)))
+    let selectableUsers = currentUsers
+    
+    // For remove tab, exclude supervisor from selection
+    if (activeTab === "remove") {
+      selectableUsers = currentUsers.filter(user => user.id !== team.supervisor.id)
+    }
+
+    const selectableUserIds = selectableUsers.map(user => user.id)
+    const allSelectableSelected = selectableUserIds.every(id => selectedUserIds.includes(id))
+
+    if (allSelectableSelected && selectableUserIds.length > 0) {
+      // If all selectable are selected, deselect all
+      setSelectedUserIds((prev) => prev.filter((id) => !selectableUserIds.includes(id)))
     } else {
-      // Otherwise, select all current page users
-      const currentUserIds = currentUsers.map((user) => user.id)
+      // Otherwise, select all selectable users
       setSelectedUserIds((prev) => {
-        const existingIds = prev.filter((id) => !currentUserIds.includes(id))
-        return [...existingIds, ...currentUserIds]
+        const existingIds = prev.filter((id) => !selectableUserIds.includes(id))
+        return [...existingIds, ...selectableUserIds]
       })
     }
   }
@@ -204,8 +239,15 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
     onClose();
   };
 
-  const isAllCurrentSelected =
-    currentUsers.length > 0 && currentUsers.every((user) => selectedUserIds.includes(user.id))
+  // Calculate if all selectable users are selected
+  const selectableUsers = activeTab === "remove" 
+    ? currentUsers.filter(user => user.id !== team.supervisor.id)
+    : currentUsers
+  const isAllSelectableSelected = selectableUsers.length > 0 && 
+    selectableUsers.every((user) => selectedUserIds.includes(user.id))
+
+  // Check if user is supervisor and cannot be removed
+  const isUserSupervisor = (userId: number) => userId === team.supervisor.id
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -218,7 +260,7 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
           <DialogDescription>
             {activeTab === "assign" 
               ? "Select users to add to this team. Users already in the team are not shown."
-              : "Select users to remove from this team."}
+              : "Select users to remove from this team. The supervisor cannot be removed."}
           </DialogDescription>
         </DialogHeader>
 
@@ -228,7 +270,7 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
             <Info className="h-4 w-4" />
             <AlertDescription>
               <div className="text-sm">
-                <span className="font-medium">Team Supervisor:</span> {team.supervisor.firstName}{" "}
+                <span className="font-medium">Team Supervisor:</span> {team.supervisor.firstName || team.supervisor.name}{" "}
                 {team.supervisor.lastName}
                 {team.supervisor.level && (
                   <Badge className="ml-2 bg-blue text-white" variant="outline">
@@ -311,7 +353,12 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
           ) : (
             <div className="border rounded-md overflow-hidden">
               <div className="bg-gray-50 px-4 py-2 border-b flex items-center">
-                <Checkbox id="select-all" checked={isAllCurrentSelected} onCheckedChange={handleSelectAll} />
+                <Checkbox 
+                  id="select-all" 
+                  checked={isAllSelectableSelected} 
+                  onCheckedChange={handleSelectAll}
+                  disabled={activeTab === "remove" && selectableUsers.length === 0}
+                />
                 <label htmlFor="select-all" className="ml-2 text-sm font-medium">
                   Select All on This Page
                 </label>
@@ -319,36 +366,47 @@ const AssignMembersModal: React.FC<AssignMembersModalProps> = ({ team, onClose }
               </div>
 
               <div className="divide-y">
-                {currentUsers.map((user) => (
-                  <div key={user.id} className="flex items-center px-4 py-3 hover:bg-gray-50">
-                    <Checkbox
-                      id={`user-${user.id}`}
-                      checked={selectedUserIds.includes(user.id)}
-                      onCheckedChange={() => handleUserToggle(user.id)}
-                    />
-                    <label htmlFor={`user-${user.id}`} className="ml-3 flex-1 cursor-pointer">
-                      <div className="font-medium">
-                        {user.firstName} {user.lastName}
+                {currentUsers.map((user) => {
+                  const isSupervisor = isUserSupervisor(user.id)
+                  const isDisabled = activeTab === "remove" && isSupervisor
+                  
+                  return (
+                    <div key={user.id} className={`flex items-center px-4 py-3 hover:bg-gray-50 ${isDisabled ? 'opacity-50' : ''}`}>
+                      <Checkbox
+                        id={`user-${user.id}`}
+                        checked={selectedUserIds.includes(user.id)}
+                        onCheckedChange={() => handleUserToggle(user.id)}
+                        disabled={isDisabled}
+                      />
+                      <label htmlFor={`user-${user.id}`} className={`ml-3 flex-1 ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <div className="font-medium flex items-center gap-2">
+                          {user.firstName || user.name?.split(' ')[0]} {user.lastName || user.name?.split(' ').slice(1).join(' ')}
+                          {isSupervisor && (
+                            <Badge className="bg-blue-100 text-blue-800 text-xs">
+                              Supervisor
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500">{user.email}</div>
+                      </label>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge className="bg-gray-100 text-gray-800">{user.role}</Badge>
+                        {user.level && user.level !== "None" && (
+                          <Badge variant="outline" className="text-xs">
+                            Level {user.level}
+                          </Badge>
+                        )}
                       </div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
-                    </label>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge className="bg-gray-100 text-gray-800">{user.role}</Badge>
-                      {user.level && (
-                        <Badge variant="outline" className="text-xs">
-                          Level {user.level}
-                        </Badge>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Pagination controls */}
               <div className="bg-gray-50 px-4 py-2 border-t flex items-center justify-between">
                 <div className="text-sm text-gray-500">
                   Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, currentData.length)} of{" "}
-                  {currentData.length} users
+                  {currentData.length} {activeTab === "assign" ? "users" : "members"}
                 </div>
 
                 <div className="flex space-x-2">

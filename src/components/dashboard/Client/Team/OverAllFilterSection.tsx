@@ -17,11 +17,10 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
   const [activeFiltersCount, setActiveFiltersCount] = useState(0)
   const allDailyTasks = useAppSelector((state) => state.taskReview.allDailyTasks)
 
-  // Extract all unique values for filters
   const { uniqueTeams, uniqueDepartments, uniqueCompanies, uniqueUsers } = useMemo(() => {
     const teams = new Set<string>()
     const departments = new Set<string>()
-    const companies = new Set<string>()
+    const companies = new Map<number, {id: number, name: string}>() // Changed to Map to store company objects
     const users = new Map<number, {id: number, username: string, teams: string[]}>()
 
     allDailyTasks.forEach((member) => {
@@ -41,7 +40,10 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
       Object.values(member.submissions).forEach((submission: any) => {
         submission.tasks.forEach((task: any) => {
           if (task.department) departments.add(task.department)
-          if (task.company) companies.add(task.company)
+          if (task.company) {
+            // Store company object with id as key to avoid duplicates
+            companies.set(task.company.id, task.company)
+          }
         })
       })
     })
@@ -49,7 +51,7 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
     return {
       uniqueTeams: Array.from(teams).sort(),
       uniqueDepartments: Array.from(departments).sort(),
-      uniqueCompanies: Array.from(companies).sort(),
+      uniqueCompanies: Array.from(companies.values()).sort((a, b) => a.name.localeCompare(b.name)),
       uniqueUsers: Array.from(users.values())
     }
   }, [allDailyTasks])
@@ -58,7 +60,7 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
   const filteredValues = useMemo(() => {
     let filteredDepartments = uniqueDepartments
     let filteredUsers = uniqueUsers
-    let filteredCompanies = uniqueCompanies
+    let filteredCompanies = Array.from(uniqueCompanies) // Convert to array for filtering
 
     // Filter departments and users based on selected team
     if (localFilters.team) {
@@ -76,11 +78,11 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
         })
       })
 
-      filteredCompanies = uniqueCompanies.filter(company => {
+      filteredCompanies = filteredCompanies.filter(company => {
         return allDailyTasks.some(member => {
           if (!userIDs.has(member.user.id)) return false
           return Object.values(member.submissions).some((submission: any) => 
-            submission.tasks.some((task: any) => task.company === company)
+            submission.tasks.some((task: any) => task.company?.id === company.id)
           )
         })
       })
@@ -104,6 +106,57 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
       companies: filteredCompanies
     }
   }, [localFilters.team, localFilters.department, uniqueDepartments, uniqueUsers, uniqueCompanies, allDailyTasks])
+
+  // // Get filtered values based on current selections
+  // const filteredValues = useMemo(() => {
+  //   let filteredDepartments = uniqueDepartments
+  //   let filteredUsers = uniqueUsers
+  //   let filteredCompanies = uniqueCompanies
+
+  //   // Filter departments and users based on selected team
+  //   if (localFilters.team) {
+  //     filteredUsers = uniqueUsers.filter(user => 
+  //       user.teams.includes(localFilters.team!)
+  //     )
+      
+  //     const userIDs = new Set(filteredUsers.map(u => u.id))
+  //     filteredDepartments = uniqueDepartments.filter(dept => {
+  //       return allDailyTasks.some(member => {
+  //         if (!userIDs.has(member.user.id)) return false
+  //         return Object.values(member.submissions).some((submission: any) => 
+  //           submission.tasks.some((task: any) => task.department === dept)
+  //         )
+  //       })
+  //     })
+
+  //     filteredCompanies = uniqueCompanies.filter(company => {
+  //       return allDailyTasks.some(member => {
+  //         if (!userIDs.has(member.user.id)) return false
+  //         return Object.values(member.submissions).some((submission: any) => 
+  //           submission.tasks.some((task: any) => task.company === company)
+  //         )
+  //       })
+  //     })
+  //   }
+
+  //   // Filter users based on selected department
+  //   if (localFilters.department) {
+  //     filteredUsers = filteredUsers.filter(user => {
+  //       return allDailyTasks.some(member => {
+  //         if (member.user.id !== user.id) return false
+  //         return Object.values(member.submissions).some((submission: any) => 
+  //           submission.tasks.some((task: any) => task.department === localFilters.department)
+  //         )
+  //       })
+  //     })
+  //   }
+
+  //   return {
+  //     departments: filteredDepartments,
+  //     users: filteredUsers,
+  //     companies: filteredCompanies
+  //   }
+  // }, [localFilters.team, localFilters.department, uniqueDepartments, uniqueUsers, uniqueCompanies, allDailyTasks])
 
   useEffect(() => {
     setLocalFilters(filters)
@@ -312,6 +365,24 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
           <div className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {/* Team Filter */}
+              
+<div>
+            <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
+              Company
+            </label>
+            <select
+              id="company"
+              name="company"
+              value={localFilters.company || ""}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+            >
+              <option value="">All Companies</option>
+              {filteredValues.companies.map(company => (
+                <option key={company.id} value={company.name}>{company.name}</option>
+              ))}
+            </select>
+          </div>
               <div>
                 <label htmlFor="team" className="block text-sm font-medium text-gray-700 mb-1">
                   Team
@@ -374,24 +445,7 @@ const OverAllFilterSection: React.FC<OverAllFilterSectionProps> = ({ filters, on
                 </select>
               </div>
 
-              {/* Company Filter */}
-              <div>
-                <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-                  Company
-                </label>
-                <select
-                  id="company"
-                  name="company"
-                  value={localFilters.company || ""}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                >
-                  <option value="">All Companies</option>
-                  {filteredValues.companies.map(company => (
-                    <option key={company} value={company}>{company}</option>
-                  ))}
-                </select>
-              </div>
+
 
               {/* Status Filter */}
               <div>

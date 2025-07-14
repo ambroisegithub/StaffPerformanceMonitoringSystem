@@ -40,11 +40,6 @@ interface Task {
   description: string
   status: string
   due_date: string
-  company_served?: {
-    id: number
-    name?: string
-    tin?: string
-  }
   contribution: string
   reviewed: boolean
   review_status: string
@@ -67,8 +62,7 @@ const getStatusIcon = (status: string) => {
       return <FaCheckCircle className="text-green" />
     case "in_progress":
       return <FaClock className="text-blue" />
-    case "delayed":
-      return <FaExclamationCircle className="text-red" />
+
     default:
       return <FaClock className="text-gray" />
   }
@@ -79,8 +73,7 @@ const getStatusColor = (status: string) => {
     case "completed":
       return "bg-green/10 text-green border-green"
     case "in_progress":
-      return "bg-blue/10 text-blue border-blue"
-    case "delayed":
+
       return "bg-red/10 text-red border-red"
     default:
       return "bg-gray/10 text-gray border-gray"
@@ -276,13 +269,7 @@ const ViewTaskModal: React.FC<ViewTaskModalProps> = ({ task, isOpen, onClose }) 
                 {/* Basic Information Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        <FaBuilding className="inline mr-2" />
-                        Company Served
-                      </label>
-                      <p className="text-gray-900 bg-gray-50 p-3 rounded-md">{task.company_served?.name || "N/A"}</p>
-                    </div>
+   
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">

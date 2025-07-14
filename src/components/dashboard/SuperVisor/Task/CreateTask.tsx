@@ -27,10 +27,11 @@ import {
   FaSpinner,
   FaTasks,
   FaTags,
+  FaPaperclip,
 } from "react-icons/fa"
 import SupervisorDailyTasks from "./SupervisorDailyTasks"
 import Loader from "../../../ui/Loader"
-
+import FileUpload from "../../Employee/FileUpload"
 enum TaskStatus {
   PENDING = "pending",
   IN_PROGRESS = "in_progress",
@@ -60,6 +61,7 @@ const CreateTask: React.FC = () => {
   const [formProgress, setFormProgress] = useState(0)
   const [activeTab, setActiveTab] = useState("create")
   const [isFetchingDailyTasks, setIsFetchingDailyTasks] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const today = new Date().toISOString().split("T")[0]
 
   const [taskData, setTaskData] = useState({
@@ -75,10 +77,9 @@ const CreateTask: React.FC = () => {
     achieved_deliverables: "",
     created_by: user?.id || 0,
     status: TaskStatus.IN_PROGRESS,
-    task_type_id: "", // ENHANCEMENT: Add task type field
+    task_type_id: "", 
   })
 
-  // ENHANCEMENT: Fetch task types on component mount
   useEffect(() => {
     if (taskTypes.length === 0) {
       dispatch(fetchTaskTypes())
@@ -132,6 +133,11 @@ const CreateTask: React.FC = () => {
     setTaskData((prev) => ({ ...prev, task_type_id: value }))
   }
 
+  // NEW: Handle file selection
+  const handleFilesChange = (files: File[]) => {
+    setSelectedFiles(files)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (formProgress < 100) {
@@ -139,10 +145,11 @@ const CreateTask: React.FC = () => {
       return
     }
     try {
-      // ENHANCEMENT: Include task type ID if selected
+      // ENHANCEMENT: Include task type ID and files if selected
       const submissionData = {
         ...taskData,
         task_type_id: taskData.task_type_id ? Number.parseInt(taskData.task_type_id) : undefined,
+        attached_documents: selectedFiles.length > 0 ? selectedFiles : undefined, // NEW: Include files
       }
       await dispatch(createTask(submissionData)).unwrap()
       setTaskData({
@@ -160,6 +167,7 @@ const CreateTask: React.FC = () => {
         status: TaskStatus.IN_PROGRESS,
         task_type_id: "", // ENHANCEMENT: Reset task type
       })
+      setSelectedFiles([]) // NEW: Reset selected files
       fetchDailyTasksData()
     } catch (error) {}
   }
@@ -410,7 +418,6 @@ const CreateTask: React.FC = () => {
                           </div>
                         </SelectTrigger>
                         <SelectContent>
-
                           <SelectItem value={TaskStatus.IN_PROGRESS}>
                             <div className="flex items-center">
                               <FaClock className="text-blue mr-2 text-xs" />
@@ -423,7 +430,6 @@ const CreateTask: React.FC = () => {
                               <span>Completed</span>
                             </div>
                           </SelectItem>
-
                         </SelectContent>
                       </Select>
                     </div>
@@ -483,6 +489,22 @@ const CreateTask: React.FC = () => {
                       <p className="text-xs text-gray-500 mt-0.5">
                         {taskData.achieved_deliverables.length}/300 characters
                       </p>
+                    </div>
+
+                    {/* NEW: File Upload Section */}
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <FaPaperclip className="inline mr-1 text-xs" />
+                        Attach Documents (Optional)
+                      </label>
+                      <FileUpload
+                        files={selectedFiles}
+                        onFilesChange={handleFilesChange}
+                        disabled={loading}
+                        maxFiles={5}
+                        maxFileSize={10}
+                        existingFiles={[]}
+                      />
                     </div>
                   </div>
 

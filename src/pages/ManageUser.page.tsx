@@ -38,7 +38,7 @@ import {
   X,
   Save,
   Loader2,
-  
+
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -111,8 +111,8 @@ const ManageUser: React.FC = () => {
   const [userToDelete, setUserToDelete] = useState<number | null>(null);
   const [newRole, setNewRole] = useState<string>("");
 
-const [userToDeactivate, setUserToDeactivate] = useState<number | null>(null);
-const [deactivateMessage, setDeactivateMessage] = useState<string>("");
+  const [userToDeactivate, setUserToDeactivate] = useState<number | null>(null);
+  const [deactivateMessage, setDeactivateMessage] = useState<string>("");
 
   // Update user modal states
   const [isUpdateModalVisible, setIsUpdateModalVisible] = useState(false);
@@ -178,26 +178,26 @@ const [deactivateMessage, setDeactivateMessage] = useState<string>("");
     []
   );
 
-const handleDeactivateUser = async () => {
-  if (userToDeactivate) {
-    try {
-      const resultAction = await dispatch(deactivateUser(userToDeactivate));
-      if (deactivateUser.fulfilled.match(resultAction)) {
-        setDeactivateMessage(resultAction.payload.message || "User deactivated successfully");
-        // Refetch users after deactivation/activation
-        if (loggedInUser?.organization?.id) {
-          await dispatch(fetchUsers(loggedInUser.organization.id));
+  const handleDeactivateUser = async () => {
+    if (userToDeactivate) {
+      try {
+        const resultAction = await dispatch(deactivateUser(userToDeactivate));
+        if (deactivateUser.fulfilled.match(resultAction)) {
+          setDeactivateMessage(resultAction.payload.message || "User deactivated successfully");
+          // Refetch users after deactivation/activation
+          if (loggedInUser?.organization?.id) {
+            await dispatch(fetchUsers(loggedInUser.organization.id));
+          }
+        } else {
+          setDeactivateMessage(resultAction.payload || "Failed to deactivate user");
         }
-      } else {
-        setDeactivateMessage(resultAction.payload || "Failed to deactivate user");
+        setUserToDeactivate(null);
+      } catch (error) {
+        setDeactivateMessage("Failed to deactivate user");
+        setUserToDeactivate(null);
       }
-      setUserToDeactivate(null);
-    } catch (error) {
-      setDeactivateMessage("Failed to deactivate user");
-      setUserToDeactivate(null);
     }
-  }
-};
+  };
   const handleBulkUpdateRole = async () => {
     if (!newRole) return;
 
@@ -210,7 +210,7 @@ const handleDeactivateUser = async () => {
       }
       setSelectedUsers([]);
       setIsEditRoleVisible(false);
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const confirmDelete = async () => {
@@ -219,7 +219,7 @@ const handleDeactivateUser = async () => {
         await dispatch(deleteUser(userToDelete)).unwrap();
         setUserToDelete(null);
         setSelectedUsers((prev) => prev.filter((id) => id !== userToDelete));
-      } catch (error) {}
+      } catch (error) { }
     }
   };
 
@@ -454,11 +454,10 @@ const handleDeactivateUser = async () => {
           onClick={() => handlePageChange(i)}
           variant={currentPage === i ? "default" : "outline"}
           size="sm"
-          className={`mx-1 transition-all duration-200 ${
-            currentPage === i
+          className={`mx-1 transition-all duration-200 ${currentPage === i
               ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25 border-0"
               : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50"
-          }`}
+            }`}
         >
           {i}
         </Button>
@@ -831,135 +830,147 @@ const handleDeactivateUser = async () => {
                   <CardContent className="p-0">
                     <div className="overflow-x-auto">
                       <Table>
-<TableHeader>
-  <TableRow className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-slate-200">
-    <TableHead className="w-16 font-semibold text-slate-700 py-4">
-      #
-    </TableHead>
-    <TableHead className="font-semibold text-slate-700 py-4">
-      User Name
-    </TableHead>
+                        <TableHeader>
+                          <TableRow className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-slate-200">
+                            <TableHead className="w-16 font-semibold text-slate-700 py-4">
+                              #
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 py-4">
+                              User Name
+                            </TableHead>
 
-    <TableHead className="font-semibold text-slate-700 py-4">
-      Company
-    </TableHead>
-    <TableHead className="font-semibold text-slate-700 py-4">
-      Department
-    </TableHead>
-        <TableHead className="font-semibold text-slate-700 py-4">
-      Position
-    </TableHead>
-    <TableHead className="font-semibold text-slate-700 py-4">
-      Level
-    </TableHead>
-    {loggedInUser?.role !== "overall" && (
-      <TableHead className="text-right font-semibold text-slate-700 py-4">
-        Actions
-      </TableHead>
-    )}
-  </TableRow>
-</TableHeader>
-<TableBody>
-  <AnimatePresence>
-    {currentUsers.map((tableUser, index) => (
-      <motion.tr
-        key={tableUser.id}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 20 }}
-        transition={{
-          duration: 0.3,
-          delay: index * 0.05,
-        }}
-        className="hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 transition-all duration-200 border-b border-slate-100"
-      >
-        <TableCell className="font-medium text-slate-600 py-4">
-          <div className="bg-slate-100 rounded-full w-8 h-8 flex items-center justify-center text-sm font-semibold text-slate-700">
-            {indexOfFirstUser + index + 1}
-          </div>
-        </TableCell>
+                            <TableHead className="font-semibold text-slate-700 py-4">
+                              Company
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 py-4">
+                              Department
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 py-4">
+                              Position
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 py-4">
+                              Direct Supervisor
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700 py-4">
+                              Level
+                            </TableHead>
+                            {loggedInUser?.role !== "overall" && (
+                              <TableHead className="text-right font-semibold text-slate-700 py-4">
+                                Actions
+                              </TableHead>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <AnimatePresence>
+                            {currentUsers.map((tableUser, index) => (
+                              <motion.tr
+                                key={tableUser.id}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                transition={{
+                                  duration: 0.3,
+                                  delay: index * 0.05,
+                                }}
+                                className="hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 transition-all duration-200 border-b border-slate-100"
+                              >
+                                <TableCell className="font-medium text-slate-600 py-4">
+                                  <div className="bg-slate-100 rounded-full w-8 h-8 flex items-center justify-center text-sm font-semibold text-slate-700">
+                                    {indexOfFirstUser + index + 1}
+                                  </div>
+                                </TableCell>
 
-        <TableCell className="py-4">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full w-10 h-10 flex items-center justify-center text-white font-semibold text-sm shadow-lg">
-              {getInitials(tableUser.username)}
-            </div>
-            <div>
-              <p className="font-semibold text-slate-800">
-                {tableUser.username}
-              </p>
-            </div>
-          </div>
-        </TableCell>
+                                <TableCell className="py-4">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full w-10 h-10 flex items-center justify-center text-white font-semibold text-sm shadow-lg">
+                                      {getInitials(tableUser.username)}
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-slate-800">
+                                        {tableUser.username}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </TableCell>
 
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.company?.name ||
-              loggedInUser?.organization?.name ||
-              "N/A"}
-          </span>
-        </TableCell>
+                                <TableCell className="py-4">
+                                  <span className="text-slate-600 font-medium">
+                                    {tableUser.company?.name ||
+                                      loggedInUser?.organization?.name ||
+                                      "N/A"}
+                                  </span>
+                                </TableCell>
 
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.department?.name || "N/A"}
-          </span>
-        </TableCell>
+                                <TableCell className="py-4">
+                                  <span className="text-slate-600 font-medium">
+                                    {tableUser.department?.name || "N/A"}
+                                  </span>
+                                </TableCell>
 
-                {/* Position column (instead of email) */}
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.position?.title || "N/A"}
-          </span>
-        </TableCell>
+                                {/* Position column (instead of email) */}
+                                <TableCell className="py-4">
+                                  <span className="text-slate-600 font-medium">
+                                    {tableUser.position?.title || "N/A"}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="py-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-slate-600 font-medium">
+                                      {tableUser.position?.directSupervisor
+                                        ? `${tableUser.position.directSupervisor.title}`
+                                        : "Top level Supervisor"}
+                                    </span>
+                                  </div>
+                                </TableCell>
 
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.supervisoryLevel?.level || "N/A"}
-          </span>
-        </TableCell>
+                                <TableCell className="py-4">
+                                  <span className="text-slate-600 font-medium">
+                                    {tableUser.supervisoryLevel?.level || "N/A"}
+                                  </span>
+                                </TableCell>
 
-        <TableCell className="text-right py-4">
-          <div className="flex justify-end space-x-2">
-            {loggedInUser?.role !== "overall" && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 px-3 bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-all duration-200 shadow-sm"
-                  onClick={() => handleUpdateUser(tableUser)}
-                >
-                  <Edit className="h-4 w-4" />
-                  <span className="sr-only md:not-sr-only md:ml-2">
-                    Edit
-                  </span>
-                </Button>
-<Button
-          variant="outline"
-          size="sm"
-          className={`h-9 px-3 bg-white ${tableUser.isActive ? "text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700" : "text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 hover:text-green-700"} transition-all duration-200 shadow-sm`}
-          onClick={() => setUserToDeactivate(tableUser.id)}
-        >
-          {tableUser.isActive ? (
-            <>
-              <UserX className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:ml-2">Deactivate</span>
-            </>
-          ) : (
-            <>
-              <UserCheck className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:ml-2">Inactive</span>
-            </>
-          )}
-        </Button>
-              </>
-            )}
-          </div>
-        </TableCell>
-      </motion.tr>
-    ))}
-  </AnimatePresence>
-</TableBody>
+                                <TableCell className="text-right py-4">
+                                  <div className="flex justify-end space-x-2">
+                                    {loggedInUser?.role !== "overall" && (
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 px-3 bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-all duration-200 shadow-sm"
+                                          onClick={() => handleUpdateUser(tableUser)}
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                          <span className="sr-only md:not-sr-only md:ml-2">
+                                            Edit
+                                          </span>
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className={`h-9 px-3 bg-white ${tableUser.isActive ? "text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700" : "text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 hover:text-green-700"} transition-all duration-200 shadow-sm`}
+                                          onClick={() => setUserToDeactivate(tableUser.id)}
+                                        >
+                                          {tableUser.isActive ? (
+                                            <>
+                                              <UserX className="h-4 w-4" />
+                                              <span className="sr-only md:not-sr-only md:ml-2">Deactivate</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <UserCheck className="h-4 w-4" />
+                                              <span className="sr-only md:not-sr-only md:ml-2">Inactive</span>
+                                            </>
+                                          )}
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </motion.tr>
+                            ))}
+                          </AnimatePresence>
+                        </TableBody>
                       </Table>
                     </div>
                   </CardContent>
@@ -1168,11 +1179,10 @@ const handleDeactivateUser = async () => {
                         disabled={updateFormData.position_id !== "none"}
                       >
                         <SelectTrigger
-                          className={`bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 ${
-                            updateFormData.position_id !== "none"
+                          className={`bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 ${updateFormData.position_id !== "none"
                               ? "opacity-60 cursor-not-allowed bg-slate-100"
                               : "hover:border-slate-400"
-                          }`}
+                            }`}
                         >
                           <SelectValue
                             placeholder={
@@ -1234,11 +1244,10 @@ const handleDeactivateUser = async () => {
                         disabled={updateFormData.position_id !== "none"}
                       >
                         <SelectTrigger
-                          className={`bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 ${
-                            updateFormData.position_id !== "none"
+                          className={`bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 ${updateFormData.position_id !== "none"
                               ? "opacity-60 cursor-not-allowed bg-slate-100"
                               : "hover:border-slate-400"
-                          }`}
+                            }`}
                         >
                           <SelectValue
                             placeholder={
@@ -1412,37 +1421,37 @@ const handleDeactivateUser = async () => {
           </AlertDialogContent>
         </AlertDialog>
         <AlertDialog
-  open={!!userToDeactivate}
-  onOpenChange={() => setUserToDeactivate(null)}
->
-  <AlertDialogContent className="bg-white border-0 shadow-2xl rounded-2xl max-w-md">
-    <AlertDialogHeader className="pb-4">
-      <AlertDialogTitle className="text-xl font-bold text-slate-800 flex items-center">
-        <div className="bg-red-100 rounded-full p-2 mr-3">
-          <UserX className="h-5 w-5 text-red-600" />
-        </div>
-        Are you absolutely sure?
-      </AlertDialogTitle>
-      <AlertDialogDescription className="text-slate-600 text-base leading-relaxed">
-        This action will deactivate the user account and cannot be undone. All associated data will be preserved but the user will not be able to log in.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter className="gap-3">
-      <AlertDialogCancel className="border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200">
-        Cancel
-      </AlertDialogCancel>
-      <AlertDialogAction
-        onClick={handleDeactivateUser}
-        className="bg-gradient-to-r from-red-500 to-rose-600 text-white hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25 transition-all duration-200"
-      >
-        Deactivate User
-      </AlertDialogAction>
-    </AlertDialogFooter>
-    {deactivateMessage && (
-      <div className="mt-4 text-center text-sm text-red-600">{deactivateMessage}</div>
-    )}
-  </AlertDialogContent>
-</AlertDialog>
+          open={!!userToDeactivate}
+          onOpenChange={() => setUserToDeactivate(null)}
+        >
+          <AlertDialogContent className="bg-white border-0 shadow-2xl rounded-2xl max-w-md">
+            <AlertDialogHeader className="pb-4">
+              <AlertDialogTitle className="text-xl font-bold text-slate-800 flex items-center">
+                <div className="bg-red-100 rounded-full p-2 mr-3">
+                  <UserX className="h-5 w-5 text-red-600" />
+                </div>
+                Are you absolutely sure?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-600 text-base leading-relaxed">
+                This action will deactivate the user account and cannot be undone. All associated data will be preserved but the user will not be able to log in.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-3">
+              <AlertDialogCancel className="border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeactivateUser}
+                className="bg-gradient-to-r from-red-500 to-rose-600 text-white hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25 transition-all duration-200"
+              >
+                Deactivate User
+              </AlertDialogAction>
+            </AlertDialogFooter>
+            {deactivateMessage && (
+              <div className="mt-4 text-center text-sm text-red-600">{deactivateMessage}</div>
+            )}
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

@@ -35,7 +35,7 @@ import AssignMembersModal from "./AssignMembersModal";
 import type {  RootState } from "../../../../Redux/store"
 import { useDispatch, useSelector } from "react-redux"
 import { fetchUsers } from "../../../../Redux/Slices/ManageUserSlice"
-// Update the component to include state for the AssignMembersModal
+
 interface TeamTableProps {
   teams: Team[];
   currentPage: number;
@@ -59,12 +59,17 @@ const TeamTable: React.FC<TeamTableProps> = ({
   const [isAssignMembersOpen, setIsAssignMembersOpen] = useState(false);
   const { user: loggedInUser } = useSelector((state: RootState) => state.login);
 
-  const [activeTab, setActiveTab] = useState("levels");
   useEffect(() => {
     if (loggedInUser?.organization?.id) {
       dispatch(fetchUsers(loggedInUser.organization.id));
     }
   }, [dispatch, loggedInUser]);
+
+  // Helper function to calculate total team members including supervisor
+  const getTotalMemberCount = (team: Team) => {
+    // Count regular members + supervisor (if exists)
+    return team.members.length + (team.supervisor ? 1 : 0);
+  };
 
   const handleDelete = (team: Team) => {
     setTeamToDelete(team);
@@ -87,7 +92,6 @@ const TeamTable: React.FC<TeamTableProps> = ({
     onViewDetails(team);
   };
 
-  // Add a function to handle opening the AssignMembersModal
   const handleAssignMembers = (team: Team) => {
     setSelectedTeam(team);
     dispatch(setSelectedTeamAction(team));
@@ -131,7 +135,9 @@ const TeamTable: React.FC<TeamTableProps> = ({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{team.members.length} members</Badge>
+                  <Badge variant="outline">
+                    {getTotalMemberCount(team)} members
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   {team.isActive ? (
@@ -142,19 +148,18 @@ const TeamTable: React.FC<TeamTableProps> = ({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                                {loggedInUser?.role !== "overall" && (
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAssignMembers(team)}
-                      className="h-8 w-8 p-0 hover:bg-white"
-                      title="Assign Members"
-                    >
-                      <UserPlus className="h-4 w-4 text-green" />
-                      <span className="sr-only">Assign Members</span>
-                    </Button>
-)}
+                    {loggedInUser?.role !== "overall" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAssignMembers(team)}
+                        className="h-8 w-8 p-0 hover:bg-white"
+                        title="Assign Members"
+                      >
+                        <UserPlus className="h-4 w-4 text-green" />
+                        <span className="sr-only">Assign Members</span>
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -165,24 +170,23 @@ const TeamTable: React.FC<TeamTableProps> = ({
                       <Eye className="h-4 w-4" />
                       <span className="sr-only">View Details</span>
                     </Button>
-                                {loggedInUser?.role !== "overall" && (
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(team)}
-                      className="h-8 w-8 p-0 text-red hover:bg-white"
-                      disabled={deletingTeamId === team.id.toString()}
-                      title="Delete Team"
-                    >
-                      {deletingTeamId === team.id.toString() ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-red" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                      <span className="sr-only">Delete</span>
-                    </Button>
-                                )}
+                    {loggedInUser?.role !== "overall" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(team)}
+                        className="h-8 w-8 p-0 text-red hover:bg-white"
+                        disabled={deletingTeamId === team.id.toString()}
+                        title="Delete Team"
+                      >
+                        {deletingTeamId === team.id.toString() ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-red" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">Delete</span>
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -243,4 +247,3 @@ const TeamTable: React.FC<TeamTableProps> = ({
 };
 
 export default TeamTable;
-

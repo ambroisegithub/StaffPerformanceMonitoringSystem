@@ -98,9 +98,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
           achieved_deliverables: initialData.achieved_deliverables || "",
           created_by: initialData.created_by || user?.id || 0,
           status: initialData.status || TaskStatus.IN_PROGRESS,
-          task_type_id: initialData.taskType?.id?.toString() || "", // ENHANCEMENT: Set existing task type
+          task_type_id: initialData.taskType?.id?.toString() || "",
         })
-        setSelectedFiles([])
+
+        if (initialData.attached_documents && initialData.attached_documents.length > 0) {
+          const existingDocs = initialData.attached_documents.map(doc => {
+            return new File([], doc.name || "document", {
+              type: doc.type || "application/octet-stream"
+            })
+          })
+          setSelectedFiles(existingDocs)
+        } else {
+          setSelectedFiles([])
+        }
       } else {
         setTaskData({
           title: "",
@@ -516,6 +526,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
                     disabled={isLoading}
                     maxFiles={5}
                     maxFileSize={10}
+                    existingFiles={mode === "rework" && initialData?.attached_documents ?
+                      initialData.attached_documents.map(doc => ({
+                        name: doc.name,
+                        url: doc.url,
+                        size: doc.size,
+                        type: doc.type
+                      })) : []
+                    }
                   />
                 </div>
               </div>

@@ -137,10 +137,7 @@ const ViewTaskModal: React.FC<ViewTaskModalProps> = ({ task, isOpen, onClose }) 
               <div>
                 {/* Company */}
                 <div className="mb-6">
-                  <h3 className="text-sm uppercase font-bold text-gray-500 mb-3 flex items-center">
-                    <span className="w-1 h-5 bg-blue rounded mr-2"></span>
-                    Company Details
-                  </h3>
+
                   <div className="flex items-start bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
                     <FaBuilding className="text-blue mr-4 mt-1 text-xl flex-shrink-0" />
                     <div>

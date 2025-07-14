@@ -317,7 +317,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         <div className="flex items-center">
           <Reply size={14} className="text-gray-500 dark:text-gray-400 mr-2" />
           <div className="text-sm text-gray-700 dark:text-gray-300">
-            <span className="font-medium">Replying to {replyingTo.sender.id === currentUserId ? "yourself" : replyingTo.sender.name}</span>
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{replyingTo.content}</p>
           </div>
         </div>
@@ -331,32 +330,32 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     )
   }
 
-  const renderMessage = (message: Message, isFirstInGroup: boolean) => {
-    const isCurrentUser = message.sender.id === currentUserId
-    const hasReplyTo = !!message.reply_to
-    const hasAttachments = message.attachments && message.attachments.length > 0
-    const hasTaskInfo = message.taskId || message.taskTitle
-    const isTaskMessage = hasTaskInfo || (taskContext && message.taskId === taskContext.taskId)
+const renderMessage = (message: Message, isFirstInGroup: boolean) => {
+  const isCurrentUser = message.sender.id === currentUserId
+  const hasReplyTo = !!message.reply_to
+  const hasAttachments = message.attachments && message.attachments.length > 0
+  const hasTaskInfo = message.taskId || message.taskTitle
+  const isTaskMessage = hasTaskInfo || (taskContext && message.taskId === taskContext.taskId)
 
-    return (
+  return (
+    <div
+      key={message.id}
+      id={`message-${message.id}`}
+      className={`group relative flex ${isCurrentUser ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-4" : "mt-1"} px-4`}
+      onMouseEnter={() => setSelectedMessage(message.id)}
+      onMouseLeave={() => setSelectedMessage(null)}
+    >
       <div
-        key={message.id}
-        id={`message-${message.id}`}
-        className={`group relative flex ${isCurrentUser ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-4" : "mt-1"} px-4`}
-        onMouseEnter={() => setSelectedMessage(message.id)}
-        onMouseLeave={() => setSelectedMessage(null)}
+        className={`relative max-w-xs lg:max-w-md ${
+          isCurrentUser
+            ? isTaskMessage
+              ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white"
+              : "bg-gradient-to-br from-green-500 to-green-600 text-white"
+            : isTaskMessage
+              ? "bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-700 text-gray-800 dark:text-gray-100"
+              : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600"
+        } ${hasTaskInfo ? "rounded-b-lg" : "rounded-lg"} shadow-sm overflow-hidden`}
       >
-        <div
-          className={`relative max-w-xs lg:max-w-md ${
-            isCurrentUser
-              ? isTaskMessage
-                ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white"
-                : "bg-gradient-to-br from-green-500 to-green-600 text-white"
-              : isTaskMessage
-                ? "bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-700 text-gray-800 dark:text-gray-100"
-                : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600"
-          } ${hasTaskInfo ? "rounded-b-lg" : "rounded-lg"} shadow-sm overflow-hidden`}
-        >
           {renderMessageActions(message)}
 
           {showEmojiPicker === message.id && (
@@ -375,16 +374,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
           {renderTaskBadge(message)}
 
-          {hasReplyTo && (
-            <div
-              className={`px-4 pt-3 pb-1 text-xs ${
-                isCurrentUser ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
-              } border-l-2 ${isCurrentUser ? "border-blue-300" : "border-gray-300 dark:border-gray-500"} ml-2 mt-2 mb-1`}
-            >
-              <p className="font-medium mb-0.5">{message.reply_to?.id === currentUserId ? "You" : "Reply to"}</p>
-              <p className="truncate">{message.reply_to?.content || ""}</p>
-            </div>
-          )}
+{hasReplyTo && (
+          <div
+            className={`px-4 pt-3 pb-1 text-xs ${
+              isCurrentUser ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+            } border-l-2 ${isCurrentUser ? "border-blue-300" : "border-gray-300 dark:border-gray-500"} ml-2 mt-2 mb-1`}
+          >
+       
+            <p className="truncate">{message.reply_to?.content || ""}</p>
+          </div>
+        )}
 
           {/* Attachments */}
           {hasAttachments && (

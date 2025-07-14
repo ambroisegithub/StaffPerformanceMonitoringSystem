@@ -68,66 +68,68 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
     }
   }, [])
 
-  const handleSendMessage = async () => {
-    if (message.trim() === "" && attachments.length === 0) return
+const handleSendMessage = async () => {
+  if (message.trim() === "" && attachments.length === 0) return
 
-    try {
-      // Get task context for message metadata
-      let currentTaskContext = taskContext
-      if (!currentTaskContext) {
-        const taskChatContextStr = localStorage.getItem("taskChatContext")
-        if (taskChatContextStr) {
-          try {
-            currentTaskContext = JSON.parse(taskChatContextStr)
-          } catch (error) {
-            console.error("Error parsing task chat context:", error)
-          }
+  try {
+    // Get task context for message metadata
+    let currentTaskContext = taskContext
+    if (!currentTaskContext) {
+      const taskChatContextStr = localStorage.getItem("taskChatContext")
+      if (taskChatContextStr) {
+        try {
+          currentTaskContext = JSON.parse(taskChatContextStr)
+        } catch (error) {
+          console.error("Error parsing task chat context:", error)
         }
       }
-
-      // Send message to existing conversation (conversation should already exist from auto-creation)
-      if (conversationId) {
-        // Use receiverId from props, or fallback to task context
-        const targetReceiverId = receiverId || currentTaskContext?.userId
-
-        if (!targetReceiverId) {
-          showErrorToast("Receiver not found. Please try again.")
-          return
-        }
-
-        console.log("Sending message payload:")
-
-        await sendMessage(
-          conversationId,
-          targetReceiverId,
-          message,
-          attachments,
-          currentTaskContext?.taskId || null,
-          currentTaskContext?.taskTitle || null,
-          currentTaskContext?.taskDescription || null,
-          replyingTo?.id || null
-        )
-
-        // Reset input state
-        setMessage("")
-        setAttachments([])
-
-        // Clear task context after first message is sent
-        if (currentTaskContext) {
-          localStorage.removeItem("taskChatContext")
-          if (onClearTaskContext) {
-            onClearTaskContext()
-          }
-          showSuccessToast(`Message sent for task: ${currentTaskContext.taskTitle}`)
-        }
-      } else {
-        showErrorToast("No conversation available. Please wait for conversation to be created.")
-      }
-    } catch (error) {
-      console.error("Error sending message:", error)
-      showErrorToast("Failed to send message. Please try again.")
     }
+
+    // Send message to existing conversation
+    if (conversationId) {
+      const targetReceiverId = receiverId || currentTaskContext?.userId
+
+      if (!targetReceiverId) {
+        showErrorToast("Receiver not found. Please try again.")
+        return
+      }
+
+      console.log("Sending message with reply data:", { // Debug log
+        replyToId: replyingTo?.id,
+        replyContent: replyingTo?.content
+      })
+
+      await sendMessage(
+        conversationId,
+        targetReceiverId,
+        message,
+        attachments,
+        currentTaskContext?.taskId || null,
+        currentTaskContext?.taskTitle || null,
+        currentTaskContext?.taskDescription || null,
+        replyingTo?.id || null
+      )
+
+      // Reset input state
+      setMessage("")
+      setAttachments([])
+
+      // Clear task context after first message is sent
+      if (currentTaskContext) {
+        localStorage.removeItem("taskChatContext")
+        if (onClearTaskContext) {
+          onClearTaskContext()
+        }
+        showSuccessToast(`Message sent for task: ${currentTaskContext.taskTitle}`)
+      }
+    } else {
+      showErrorToast("No conversation available. Please wait for conversation to be created.")
+    }
+  } catch (error) {
+    console.error("Error sending message:", error)
+    showErrorToast("Failed to send message. Please try again.")
   }
+}
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -307,9 +309,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
         <div className="mb-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-md flex items-center justify-between">
           <div className="flex items-center">
             <Reply size={14} className="mr-1.5 text-blue-600 dark:text-blue-400" />
-            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-              Replying to {replyingTo.sender.id === currentUser?.id ? "yourself" : replyingTo.sender.name}
-            </span>
+
             <span className="ml-2 text-xs text-blue-500 dark:text-blue-400 truncate max-w-xs">
               {replyingTo.content}
             </span>

@@ -1,5 +1,4 @@
 
-// @ts-nocheck
 "use client"
 
 import React from "react"
@@ -29,6 +28,7 @@ import {
   Filter,
   Building,
   Award,
+  UserCheck,
 } from "lucide-react"
 import { Formik, Form, Field, ErrorMessage } from "formik"
 import * as Yup from "yup"
@@ -79,6 +79,7 @@ interface ICompany {
 const validationSchema = Yup.object().shape({
   title: Yup.string().required("Position title is required"),
   supervisory_level_id: Yup.string().required("Supervisory level is required"),
+  direct_supervisor_id: Yup.string().optional(),
 })
 
 const ManagePosition: React.FC = () => {
@@ -284,7 +285,32 @@ const ManagePosition: React.FC = () => {
       .then(() => setIsDataLoading(false))
       .catch(() => setIsDataLoading(false))
   }
+  const [availableSupervisors, setAvailableSupervisors] = useState<AvailableSupervisor[]>([])
 
+  // Add this useEffect to fetch supervisors when modal opens
+  useEffect(() => {
+    if (isEditModalOpen && user?.organization?.id) {
+      const fetchSupervisors = async () => {
+        try {
+          const token = localStorage.getItem("token")
+          const response = await axios.get<APIResponse<AvailableSupervisor[]>>(
+            `${import.meta.env.VITE_BASE_URL}/v1/position/${user.organization.id}/supervisors`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          )
+          if (response.data.success) {
+            setAvailableSupervisors(response.data.data)
+          }
+        } catch (error) {
+          console.error("Error fetching supervisors:", error)
+        }
+      }
+      fetchSupervisors()
+    }
+  }, [isEditModalOpen, user?.organization?.id])
   // Render edit modal
   const renderEditModal = () => (
     <AnimatePresence>
@@ -318,7 +344,9 @@ const ManagePosition: React.FC = () => {
                         company_id: selectedPosition.company?.id || "",
                         department_id: selectedPosition.department?.id || "",
                         supervisory_level_id: selectedPosition.supervisoryLevel?.id || "",
+                        direct_supervisor_id: selectedPosition.directSupervisor?.id || "",
                       }}
+
                       validationSchema={validationSchema}
                       onSubmit={async (values) => {
                         if (isRateLimited) {
@@ -333,6 +361,7 @@ const ManagePosition: React.FC = () => {
                           isActive: values.isActive,
                           department_id: Number(values.department_id),
                           supervisory_level_id: Number(values.supervisory_level_id),
+                          direct_supervisor_id: values.direct_supervisor_id ? Number(values.direct_supervisor_id) : null,
                           company_id: values.company_id ? Number(values.company_id) : null,
                         }
 
@@ -470,7 +499,32 @@ const ManagePosition: React.FC = () => {
                                 </label>
                               </div>
                             </div>
-
+                            {/* Direct Supervisor Selection */}
+                            <div className="md:col-span-2">
+                              <label htmlFor="direct_supervisor_id" className="block text-sm font-medium text-gray-700">
+                                <UserCheck className="inline h-4 w-4 mr-1" />
+                                Direct Supervisor (Optional)
+                              </label>
+                              <Field
+                                as="select"
+                                name="direct_supervisor_id"
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              >
+                                <option value="">None (Top Level Position)</option>
+                                {availableSupervisors
+                                  .filter(supervisor => supervisor.id !== selectedPosition.id) // Exclude current position
+                                  .map((supervisor) => (
+                                    <option key={supervisor.id} value={supervisor.id}>
+                                      {supervisor.title}
+                                    </option>
+                                  ))}
+                              </Field>
+                              <ErrorMessage name="direct_supervisor_id" component="div" className="mt-1 text-sm text-red" />
+                              <p className="mt-1 text-sm text-gray-500">
+                                Select an existing position that will serve as the direct supervisor for this position.
+                                Leave empty if this is a top-level position with no supervisor.
+                              </p>
+                            </div>
                             <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                               <button
                                 type="submit"
@@ -619,11 +673,7 @@ const ManagePosition: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    {/* Added numerical numbering column */}
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       #
                     </th>
                     <th
@@ -641,19 +691,15 @@ const ManagePosition: React.FC = () => {
                           ))}
                       </div>
                     </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Department
                     </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Supervisory Level
                     </th>
- 
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Direct Supervisor
+                    </th>
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
@@ -684,10 +730,7 @@ const ManagePosition: React.FC = () => {
                           ))}
                       </div>
                     </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -695,7 +738,6 @@ const ManagePosition: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentItems.map((position, index) => (
                     <tr key={position.id} className="hover:bg-gray-50">
-                      {/* Numerical numbering cell */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {indexOfFirstItem + index + 1}
                       </td>
@@ -724,12 +766,18 @@ const ManagePosition: React.FC = () => {
                           </span>
                         </div>
                       </td>
-             
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <UserCheck className="h-4 w-4 text-gray-400 mr-2" />
+                          <span className="text-sm text-gray-900">
+                            {position.directSupervisor?.title || "None (Top Level)"}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            position.isActive ? "bg-green text-white" : "bg-red text-white"
-                          }`}
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${position.isActive ? "bg-green text-white" : "bg-red text-white"
+                            }`}
                         >
                           {position.isActive ? "Active" : "Inactive"}
                         </span>

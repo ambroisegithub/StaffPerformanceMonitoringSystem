@@ -75,16 +75,21 @@ const ReworkModal: React.FC<ReworkModalProps> = ({ isOpen, onClose, task }) => {
     }
   }
 
-  // Return null if task is not provided
   if (!task) return null
-
+  const initialData = {
+    ...task,
+    attached_documents: task.attached_documents || [], 
+    location_name: task.location_name || "", 
+    latitude: task.latitude || 0,
+    longitude: task.longitude || 0
+  }
   return (
     <TaskModal 
       isOpen={isOpen} 
       onClose={onClose} 
       onSubmit={handleReworkSubmit} 
       mode="rework" 
-      initialData={task}
+      initialData={initialData}
       title={task.isShifted ? "Continue Shifted Task" : "Rework Task"}
       submitText={task.isShifted ? "Continue Task" : "Rework Task"}
       submitIcon={task.isShifted ? <FaExchangeAlt /> : <FaRedo />}

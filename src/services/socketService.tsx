@@ -71,7 +71,6 @@ export const disconnectSocket = () => {
   }
 }
 
-// ONLY USE SOCKET FOR SENDING MESSAGES - NO HTTP FALLBACK
 export const sendMessage = (
   conversationId: string,
   receiverId: number,
@@ -122,7 +121,7 @@ export const sendMessage = (
           replyToMessageId: replyToMessageId || undefined,
         }
 
-        console.log("Sending message payload:", messagePayload)
+        console.log("Sending message payload:", messagePayload) // Debug log
 
         socket.emit("send_message", messagePayload, (response: any) => {
           if (response?.success) {
@@ -142,6 +141,11 @@ export const sendMessage = (
                   id: receiverId,
                   name: "",
                 },
+                reply_to: response.data?.reply_to || (replyToMessageId ? {
+                  id: replyToMessageId,
+                  content: store.getState().chat.replyingTo?.content || "",
+                  sender: store.getState().chat.replyingTo?.sender || { id: 0, name: "" }
+                } : undefined),
                 task: taskId
                   ? {
                       id: taskId,
@@ -149,12 +153,6 @@ export const sendMessage = (
                       description: taskDescription || "",
                     }
                   : null,
-                reply_to: replyToMessageId
-                  ? {
-                      id: replyToMessageId,
-                      content: store.getState().chat.replyingTo?.content || "",
-                    }
-                  : undefined,
               }),
             )
             // Clear the reply after sending

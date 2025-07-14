@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client"
 
@@ -32,6 +33,7 @@ import {
   FaMusic,
   FaExchangeAlt, 
   FaHistory,
+  FaFilePdf
 } from "react-icons/fa"
 import { MessageSquare } from "lucide-react"
 import { useAppSelector, useAppDispatch } from "../../../Redux/hooks"
@@ -55,14 +57,19 @@ interface Comment {
 }
 
 interface AttachedDocument {
-  secure_url: string
-  public_id: string
-  resource_type: string
-  format: string
-  bytes: number
-  original_filename: string
-  upload_timestamp: string
+  url: string
+  name: string
+  size: number
+  type: string
+  // Optional fields from the API
+  secure_url?: string
+  public_id?: string
+  resource_type?: string
+  format?: string
+  bytes?: number
+  original_filename?: string
 }
+
 
 export enum ReviewStatus {
   PENDING = "pending",
@@ -76,11 +83,7 @@ interface Task {
   description: string
   status: string
   due_date: string
-  company_served?: {
-    id: number
-    name?: string
-    tin?: string
-  }
+
   contribution: string
   reviewed: boolean
   review_status: string
@@ -225,17 +228,28 @@ const CommentsModal: React.FC<{
   )
 }
 
-// Document Display Component
 const DocumentDisplay: React.FC<{ documents: AttachedDocument[] }> = ({ documents }) => {
+  // Filter out empty objects and invalid documents
+  const validDocuments = useMemo(() => {
+    return (documents || []).filter(doc => 
+      doc && (doc.url || doc.secure_url) && (doc.name || doc.original_filename)
+    )
+  }, [documents])
+
   const getFileIcon = (document: AttachedDocument) => {
-    if (document.resource_type === "image") return <FaImage className="text-blue-500" />
-    if (document.resource_type === "video") return <FaVideo className="text-purple-500" />
-    if (document.format === "mp3" || document.format === "wav") return <FaMusic className="text-green-500" />
+    const fileType = document.type || document.resource_type || ''
+    
+    if (fileType.includes('image')) return <FaImage className="text-blue-500" />
+    if (fileType.includes('video')) return <FaVideo className="text-purple-500" />
+    if (fileType.includes('audio') || document.format === "mp3" || document.format === "wav") {
+      return <FaMusic className="text-green-500" />
+    }
+    if (fileType.includes('pdf')) return <FaFilePdf className="text-red-500" />
     return <FaFile className="text-gray-500" />
   }
 
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
+    if (!bytes || bytes === 0) return "0 Bytes"
     const k = 1024
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -243,10 +257,13 @@ const DocumentDisplay: React.FC<{ documents: AttachedDocument[] }> = ({ document
   }
 
   const handleDownload = (document: AttachedDocument) => {
-    window.open(document.secure_url, "_blank")
+    const downloadUrl = document.url || document.secure_url
+    if (downloadUrl) {
+      window.open(downloadUrl, "_blank")
+    }
   }
 
-  if (!documents || documents.length === 0) {
+  if (!validDocuments || validDocuments.length === 0) {
     return null
   }
 
@@ -255,39 +272,53 @@ const DocumentDisplay: React.FC<{ documents: AttachedDocument[] }> = ({ document
       <div className="flex items-center mb-2">
         <FaPaperclip className="text-gray-400 mr-1" />
         <span className="text-sm font-medium text-gray-700">
-          {documents.length} attachment{documents.length !== 1 ? "s" : ""}
+          {validDocuments.length} attachment{validDocuments.length !== 1 ? "s" : ""}
         </span>
       </div>
       <div className="space-y-1">
-        {documents.map((doc, index) => (
-          <div
-            key={index}
-            className="flex items-center justify-between bg-gray-50 rounded p-2 hover:bg-gray-100 transition-colors"
-          >
-            <div className="flex items-center space-x-2 flex-1 min-w-0">
-              {getFileIcon(doc)}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{doc.original_filename}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(doc.bytes)}</p>
+        {validDocuments.map((doc, index) => {
+          // Get the best available filename
+          const fileName = doc.name || doc.original_filename || 'Document'
+          // Get the best available file size
+          const fileSize = doc.size || doc.bytes || 0
+          // Get the best available file type
+          const fileType = doc.type || doc.resource_type || 'file'
+
+          return (
+            <div
+              key={index}
+              className="flex items-center justify-between bg-gray-50 rounded p-2 hover:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                {getFileIcon(doc)}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{fileName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500">{formatFileSize(fileSize)}</p>
+                    <Badge variant="outline" className="text-xs py-0 px-1.5">
+                      {fileType.split('/').pop()?.toUpperCase() || 'FILE'}
+                    </Badge>
+                  </div>
+                </div>
               </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleDownload(doc)}
+                      className="p-1 text-blue-500 hover:text-blue-700 transition-colors"
+                    >
+                      <FaDownload className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Download {fileName}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => handleDownload(doc)}
-                    className="p-1 text-blue-500 hover:text-blue-700 transition-colors"
-                  >
-                    <FaDownload className="h-3 w-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Download {doc.original_filename}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -485,7 +516,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
       const matchesSearch =
         task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.company_served?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.related_project.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesStatus = statusFilter ? task.status === statusFilter : true
@@ -534,7 +564,10 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
     if (!hasCompletedTask) return "bg-orange-500 text-white cursor-not-allowed"
     return "bg-green text-white hover:bg-green-600"
   }
-
+  const closeTaskDetail = () => {
+    setIsDetailOpen(false)
+    setSelectedTask(null)
+  }
   // Task detail handlers
   const openTaskDetail = (task: Task) => {
     setSelectedTask(task)
@@ -677,7 +710,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                       <TableRow>
                         <TableHead className="w-[50px]">#</TableHead>
                         <TableHead>Task Details</TableHead>
-                        <TableHead>Company</TableHead>
                         <TableHead>Project</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Review</TableHead>
@@ -721,23 +753,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                                 {/* Display attached documents */}
                                 <DocumentDisplay documents={task.attached_documents || []} />
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="flex items-center">
-                                      <FaBuilding className="mr-2 text-gray-500" />
-                                      <span className="truncate max-w-[120px]">
-                                        <p>{task.company_served?.name || "N/A"}</p>
-                                      </span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{task.company_served?.name}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
                             </TableCell>
                             <TableCell>
                               <TooltipProvider>
@@ -794,101 +809,121 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                                 </Tooltip>
                               </TooltipProvider>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  onClick={() => openTaskDetail(task)}
-                                  size="sm"
-                                  className="bg-blue text-white hover:bg-blue-600"
-                                >
-                                  View
-                                </Button>
+<TableCell>
+  <div className="flex items-center gap-2">
+    {/* View Button */}
+    <Button
+      onClick={() => openTaskDetail(task)}
+      size="sm"
+      className="bg-blue text-white hover:bg-blue-600"
+    >
+      View
+    </Button>
 
-                                {/* ENHANCEMENT: Conditional Rework Button for both rejected AND shifted tasks */}
-                                {(task.review_status === ReviewStatus.REJECTED || task.isShifted) && (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleOpenRework(task)
-                                          }}
-                                          size="sm"
-                                          className="bg-orange-500 text-white hover:bg-orange-600 p-2"
-                                          aria-label="Rework task"
-                                        >
-                                          <FaRedo className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>
-                                          Rework this{" "}
-                                          {task.review_status === ReviewStatus.REJECTED ? "rejected" : "shifted"} task
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                )}
+    {/* Rework Button - Show for rejected, shifted, OR in_progress tasks */}
+    {(task.review_status === ReviewStatus.REJECTED || 
+      task.isShifted || 
+      task.status === "in_progress") && (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleOpenRework(task)
+              }}
+              size="sm"
+              className={`p-2 ${
+                task.review_status === ReviewStatus.REJECTED 
+                  ? "bg-red-500 hover:bg-red-600"
+                  : task.isShifted
+                    ? "bg-orange-500 hover:bg-orange-600"
+                    : "bg-blue-500 hover:bg-blue-600" // For in_progress
+              } text-white`}
+              aria-label={
+                task.review_status === ReviewStatus.REJECTED 
+                  ? "Rework rejected task"
+                  : task.isShifted
+                    ? "Rework shifted task"
+                    : "Rework in progress task"
+              }
+            >
+              <FaRedo className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              {task.review_status === ReviewStatus.REJECTED
+                ? "Rework rejected task"
+                : task.isShifted
+                  ? "Rework shifted task"
+                  : "Rework in progress task"}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )}
 
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleOpenTaskChat(
-                                            task,
-                                            dailyTask.user?.id || user?.id,
-                                            dailyTask.user?.username || user?.username,
-                                          )
-                                        }}
-                                        size="sm"
-                                        className="bg-green text-white hover:bg-green-600 p-2"
-                                        aria-label="Chat about task"
-                                      >
-                                        <MessageSquare className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Chat about this task</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
+    {/* Chat Button */}
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleOpenTaskChat(
+                task,
+                dailyTask.user?.id || user?.id,
+                dailyTask.user?.username || user?.username,
+              )
+            }}
+            size="sm"
+            className="bg-green text-white hover:bg-green-600 p-2"
+            aria-label="Chat about task"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Chat about this task</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
 
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleOpenComments(task)
-                                        }}
-                                        size="sm"
-                                        className="bg-purple-500 text-white hover:bg-purple-600 p-2 relative"
-                                        aria-label="View task comments"
-                                      >
-                                        <FaComments className="h-4 w-4" />
-                                        {task.comments && task.comments.length > 0 && (
-                                          <span className="absolute -top-1 -right-1 bg-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                                            {task.comments.length}
-                                          </span>
-                                        )}
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>
-                                        {task.comments && task.comments.length > 0
-                                          ? `View ${task.comments.length} comment${
-                                              task.comments.length !== 1 ? "s" : ""
-                                            }`
-                                          : "No comments"}
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                            </TableCell>
+    {/* Comments Button */}
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleOpenComments(task)
+            }}
+            size="sm"
+            className="bg-purple-500 text-white hover:bg-purple-600 p-2 relative"
+            aria-label="View task comments"
+          >
+            <FaComments className="h-4 w-4" />
+            {task.comments && task.comments.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                {task.comments.length}
+              </span>
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>
+            {task.comments && task.comments.length > 0
+              ? `View ${task.comments.length} comment${
+                  task.comments.length !== 1 ? "s" : ""
+                }`
+              : "No comments"}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  </div>
+</TableCell>
                           </TableRow>
                         ))
                       ) : (
@@ -958,34 +993,56 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                   </div>
                 )}
 
-                {/* Submit Button */}
-                <div className="mt-6 flex justify-end">
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={ dailyTask.submitted || isSubmitting || !hasCompletedTask}
-                    className={`${getButtonColor()} transition-colors duration-300`}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <FaSpinner className="animate-spin mr-2" />
-                        Submitting...
-                      </>
-                    ) : dailyTask.submitted ? (
-                      <>
-                        <FaCheck className="mr-2" />
-                        Submitted
-                      </>
-                    ) : (
-                      getButtonText()
-                    )}
-                  </Button>
-                </div>
+{/* Submit Button Section - Updated with Warning Message */}
+<div className="mt-6 flex flex-col items-end gap-2">
+  {/* Warning message that only shows when submit is possible */}
+  {hasCompletedTask && !dailyTask.submitted && (
+    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 w-full max-w-md">
+      <div className="flex">
+        <div className="flex-shrink-0">
+          <FaExclamationCircle className="h-5 w-5 text-yellow-400" />
+        </div>
+        <div className="ml-3">
+          <p className="text-sm text-yellow-700">
+            Only completed tasks will be visible to your supervisor after submission.
+            In-progress tasks will remain in your task list.
+          </p>
+        </div>
+      </div>
+    </div>
+  )}
+
+  <Button
+    onClick={handleSubmit}
+    disabled={dailyTask.submitted || isSubmitting || !hasCompletedTask}
+    className={`${getButtonColor()} transition-colors duration-300`}
+  >
+    {isSubmitting ? (
+      <>
+        <FaSpinner className="animate-spin mr-2" />
+        Submitting...
+      </>
+    ) : dailyTask.submitted ? (
+      <>
+        <FaCheck className="mr-2" />
+        Submitted
+      </>
+    ) : (
+      getButtonText()
+    )}
+  </Button>
+</div>
               </CardContent>
             </motion.div>
           )}
         </AnimatePresence>
       </Card>
 
+      <ViewTaskModal 
+        task={selectedTask} 
+        isOpen={isDetailOpen} 
+        onClose={closeTaskDetail} 
+      />
       {/* Comments Modal */}
       <CommentsModal
         isOpen={isCommentsModalOpen}
