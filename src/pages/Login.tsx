@@ -45,6 +45,17 @@ const Login: React.FC = () => {
     setShowPassword(!showPassword)
   }
 
+React.useEffect(() => {
+  localStorage.removeItem("user");
+  localStorage.removeItem("token");
+  localStorage.removeItem("firstLoginEmail");
+
+  // Also reset Redux error state
+  dispatch(clearErrors());
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
   const handleCloseModal = () => {
     dispatch(closeFirstLoginModal())
     navigate("/forgot-password")

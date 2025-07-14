@@ -101,7 +101,7 @@ const getRedirectPath = (role: string) => {
     case "supervisor":
       return "/super-visor"
     case "employee":
-      return "/employeeDashboard"
+      return "/employee-dashboard"
     case "system_leader":
       return "/system-leader"
     default:
